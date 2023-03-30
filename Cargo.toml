@@ -14,3 +14,7 @@ glfw = "0.51.0"
 paste = "1.0.12"
 rand = "0.8.5"
 thiserror = "1.0.40"
+
+[lib]
+name = "eray_lib"
+path = "src/lib/lib.rs"
