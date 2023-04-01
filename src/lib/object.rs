@@ -1,5 +1,6 @@
 use std::{
     mem::{size_of, size_of_val},
+    ops::Range,
     path::Path,
     str::SplitWhitespace,
 };
@@ -34,8 +35,24 @@ states!(Building, Built);
 
 #[derive(Debug, Default)]
 pub struct BoundingBox {
-    pub x: (f32, f32),
-    pub y: (f32, f32),
+    pub x: Range<f32>,
+    pub y: Range<f32>,
+}
+
+impl BoundingBox {
+    fn stretch_to(&mut self, pos: &Vec3) {
+        if pos.x < self.x.start {
+            self.x.start = pos.x;
+        } else if pos.x > self.x.end {
+            self.x.end = pos.x;
+        }
+
+        if pos.y < self.y.start {
+            self.y.start = pos.y;
+        } else if pos.y > self.y.end {
+            self.y.end = pos.y;
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -48,6 +65,8 @@ pub struct Polygonal<State> {
     pub normals: Vec<Vec3>,
 
     pub faces: Vec<(usize, Option<usize>, Option<usize>)>,
+
+    pub bounding_box: BoundingBox,
 }
 
 impl Polygonal<Building> {
@@ -148,6 +167,12 @@ impl Polygonal<Building> {
     /// Set object vertices (mandatory)
     pub fn vertices(&mut self, vertices: impl Iterator<Item = Vec3>) -> &mut Self {
         self.vertices = vertices.collect();
+
+        self.bounding_box = BoundingBox::default();
+        self.vertices
+            .iter()
+            .for_each(|v| self.bounding_box.stretch_to(v));
+
         self
     }
 
@@ -170,6 +195,7 @@ impl Polygonal<Building> {
                 vertices: self.vertices,
                 normals: self.normals,
                 faces: self.faces,
+                bounding_box: self.bounding_box,
             })
         }
     }
