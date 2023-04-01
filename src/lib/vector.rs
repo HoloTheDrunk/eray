@@ -16,6 +16,26 @@ macro_rules! into_primitive_array {
                     [value.x as $target, value.y as $target, value.z as $target]
                 }
             }
+
+            impl From<[$target; 3]> for Vec3 {
+                fn from(value: [$target; 3]) -> Self {
+                    Self {
+                        x: value[0] as f32,
+                        y: value[1] as f32,
+                        z: value[2] as f32,
+                    }
+                }
+            }
+
+            impl From<&[$target]> for Vec3 {
+                fn from(value: &[$target]) -> Self {
+                    Self {
+                        x: value[0] as f32,
+                        y: value[1] as f32,
+                        z: value[2] as f32,
+                    }
+                }
+            }
         )+
     };
 }
