@@ -1,3 +1,5 @@
+use crate::color::Color;
+
 use super::vector::Vec3;
 
 #[derive(Clone, Debug, Default)]
@@ -27,4 +29,16 @@ impl Ray {
     pub fn dir(&self) -> &Vec3 {
         &self.dir
     }
+}
+
+pub struct RaycastHit {
+    pub face_index: usize,
+    pub position: Vec3,
+    pub normal: Vec3,
+
+    pub color: Color,
+
+    pub diffuse: f32,
+    pub specular: f32,
+    pub specular_power: f32,
 }

@@ -5,22 +5,18 @@ use std::{
     str::SplitWhitespace,
 };
 
-use super::vector::Vec3;
+use crate::{
+    primitives::{Triangle, Vertex},
+    raycasting::{Ray, RaycastHit},
+};
 
-#[derive(Debug)]
-pub enum Object {
-    Polygonal(Polygonal<Built>),
-    Mathematical(Box<dyn Mathematical>),
-}
+use super::vector::Vec3;
 
 #[derive(Debug)]
 pub struct OpenGLObject {
     pub vertices_vbo: u32,
     pub normals_vbo: u32,
 }
-
-// TODO: Implement Sphere again
-pub trait Mathematical: std::fmt::Debug {}
 
 macro_rules! states {
     ($($state:tt),+ $(,)?) => {
@@ -34,29 +30,7 @@ macro_rules! states {
 states!(Building, Built);
 
 #[derive(Debug, Default)]
-pub struct BoundingBox {
-    pub x: Range<f32>,
-    pub y: Range<f32>,
-}
-
-impl BoundingBox {
-    fn stretch_to(&mut self, pos: &Vec3) {
-        if pos.x < self.x.start {
-            self.x.start = pos.x;
-        } else if pos.x > self.x.end {
-            self.x.end = pos.x;
-        }
-
-        if pos.y < self.y.start {
-            self.y.start = pos.y;
-        } else if pos.y > self.y.end {
-            self.y.end = pos.y;
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct Polygonal<State> {
+pub struct Object<State> {
     pub state: std::marker::PhantomData<State>,
 
     pub name: Option<String>,
@@ -64,12 +38,25 @@ pub struct Polygonal<State> {
     pub vertices: Vec<Vec3>,
     pub normals: Vec<Vec3>,
 
-    pub faces: Vec<(usize, Option<usize>, Option<usize>)>,
+    pub faces: Vec<Triangle>,
 
     pub bounding_box: BoundingBox,
 }
 
-impl Polygonal<Building> {
+impl Object<Built> {
+    fn intersects(&self, ray: &Ray) -> Option<RaycastHit> {
+        for face in self.faces.iter() {
+            if let Some((pos, normal)) = face.intersects(ray) {
+                // TODO
+                todo!()
+            }
+        }
+
+        todo!()
+    }
+}
+
+impl Object<Building> {
     pub fn new() -> Self {
         Self {
             state: std::marker::PhantomData::<Building>,
@@ -77,12 +64,93 @@ impl Polygonal<Building> {
         }
     }
 
+    fn push_vertex(&mut self, line: usize, tokens: SplitWhitespace) {
+        let coords = parse_coords(tokens, Some(line));
+        self.vertices.push(coords[0..2].into());
+    }
+
+    fn push_normal(&mut self, line: usize, tokens: SplitWhitespace) {
+        let coords = parse_coords(tokens, Some(line));
+        self.normals.push(coords[0..2].into());
+    }
+
+    fn push_face(&mut self, line: usize, tokens: SplitWhitespace) {
+        let vertices = tokens
+            .map(|token| {
+                let indices = parse_indices(token);
+                Vertex {
+                    position: self.vertices[indices[0].unwrap() - 1],
+                    normal: self.normals[indices[1].unwrap() - 1],
+                }
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            3,
+            vertices.len(),
+            "Invalid vertex count for face at line {line} (should be 3, is {})",
+            vertices.len()
+        );
+
+        let mut vertices = vertices.into_iter();
+
+        self.faces.push(Triangle {
+            a: vertices.next().unwrap(),
+            b: vertices.next().unwrap(),
+            c: vertices.next().unwrap(),
+        });
+    }
+
+    /// Set object name (optional)
+    pub fn name(&mut self, name: &str) -> &mut Self {
+        self.name = Some(name.to_owned());
+        self
+    }
+
+    /// Set object vertices (mandatory)
+    pub fn vertices(&mut self, vertices: impl Iterator<Item = Vec3>) -> &mut Self {
+        self.vertices = vertices.collect();
+
+        self.bounding_box = BoundingBox::default();
+        self.vertices
+            .iter()
+            .for_each(|v| self.bounding_box.stretch_to(v));
+
+        self
+    }
+
+    /// Set object normals (mandatory)
+    pub fn normals(&mut self, normals: impl Iterator<Item = Vec3>) -> &mut Self {
+        self.normals = normals.collect();
+        self
+    }
+
+    /// Lock object's fields and allow for OpenGL conversion
+    pub fn build(self) -> Result<Object<Built>, &'static str> {
+        if self.vertices.is_empty() {
+            Err("Missing vertices")
+        } else if self.normals.is_empty() {
+            Err("Missing normals")
+        } else {
+            Ok(Object::<Built> {
+                state: std::marker::PhantomData,
+                name: self.name,
+                vertices: self.vertices,
+                normals: self.normals,
+                faces: self.faces,
+                bounding_box: self.bounding_box,
+            })
+        }
+    }
+}
+
+impl Object<Built> {
     /// Load an object from a Wavefront .obj file
     pub fn load_obj(path: &Path) -> std::io::Result<Self> {
         let content = std::fs::read_to_string(path)?;
 
         // let mut object = Self::default();
-        let mut object = Self::default();
+        let mut object = Object::<Building>::default();
 
         for (line, line_content) in content.lines().enumerate() {
             if line_content.is_empty() || line_content.chars().next().unwrap_or('#') == '#' {
@@ -114,94 +182,9 @@ impl Polygonal<Building> {
             }
         }
 
-        Ok(object)
+        Ok(object.build().unwrap())
     }
 
-    fn push_vertex(&mut self, line: usize, tokens: SplitWhitespace) {
-        let coords = parse_coords(tokens, Some(line));
-        self.vertices.push(coords[0..2].into());
-    }
-
-    fn push_normal(&mut self, line: usize, tokens: SplitWhitespace) {
-        let coords = parse_coords(tokens, Some(line));
-        self.normals.push(coords[0..2].into());
-    }
-
-    fn push_face(&mut self, line: usize, tokens: SplitWhitespace) {
-        let indices = tokens
-            // Keeping only the vertex indices
-            .map(|token| {
-                let indices = parse_indices(token);
-                (
-                    indices[0].unwrap() - 1,
-                    indices
-                        .get(1)
-                        .unwrap_or_else(|| &None)
-                        .to_owned()
-                        .map(|index| index - 1),
-                    indices
-                        .get(2)
-                        .unwrap_or_else(|| &None)
-                        .to_owned()
-                        .map(|index| index - 1),
-                )
-            })
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            3,
-            indices.len(),
-            "Invalid vertex count for face at line {line} (should be 3, is {})",
-            indices.len()
-        );
-
-        self.faces.extend(indices.iter());
-    }
-
-    /// Set object name (optional)
-    pub fn name(&mut self, name: &str) -> &mut Self {
-        self.name = Some(name.to_owned());
-        self
-    }
-
-    /// Set object vertices (mandatory)
-    pub fn vertices(&mut self, vertices: impl Iterator<Item = Vec3>) -> &mut Self {
-        self.vertices = vertices.collect();
-
-        self.bounding_box = BoundingBox::default();
-        self.vertices
-            .iter()
-            .for_each(|v| self.bounding_box.stretch_to(v));
-
-        self
-    }
-
-    /// Set object normals (mandatory)
-    pub fn normals(&mut self, normals: impl Iterator<Item = Vec3>) -> &mut Self {
-        self.normals = normals.collect();
-        self
-    }
-
-    /// Lock object's fields and allow for OpenGL conversion
-    pub fn build(self) -> Result<Polygonal<Built>, &'static str> {
-        if self.vertices.is_empty() {
-            Err("Missing vertices")
-        } else if self.normals.is_empty() {
-            Err("Missing normals")
-        } else {
-            Ok(Polygonal::<Built> {
-                state: std::marker::PhantomData,
-                name: self.name,
-                vertices: self.vertices,
-                normals: self.normals,
-                faces: self.faces,
-                bounding_box: self.bounding_box,
-            })
-        }
-    }
-}
-
-impl Polygonal<Built> {
     pub fn to_opengl(&self) {
         for (index, array, len) in [&self.vertices, &self.normals]
             .into_iter()
@@ -244,6 +227,28 @@ impl Polygonal<Built> {
                     );
                 }
             }
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct BoundingBox {
+    pub x: Range<f32>,
+    pub y: Range<f32>,
+}
+
+impl BoundingBox {
+    fn stretch_to(&mut self, pos: &Vec3) {
+        if pos.x < self.x.start {
+            self.x.start = pos.x;
+        } else if pos.x > self.x.end {
+            self.x.end = pos.x;
+        }
+
+        if pos.y < self.y.start {
+            self.y.start = pos.y;
+        } else if pos.y > self.y.end {
+            self.y.end = pos.y;
         }
     }
 }
