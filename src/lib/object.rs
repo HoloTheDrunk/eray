@@ -45,10 +45,21 @@ pub struct Object<State> {
 
 impl Object<Built> {
     fn intersects(&self, ray: &Ray) -> Option<RaycastHit> {
-        for face in self.faces.iter() {
-            if let Some((pos, normal)) = face.intersects(ray) {
-                // TODO
-                todo!()
+        if !self.bounding_box.intersects(ray) {
+            return None;
+        }
+
+        for (index, face) in self.faces.iter().enumerate() {
+            if let Some((position, normal)) = face.intersects(ray) {
+                return Some(RaycastHit {
+                    face_index: index,
+                    position,
+                    normal,
+                    color: todo!(),
+                    diffuse: todo!(),
+                    specular: todo!(),
+                    specular_power: todo!(),
+                });
             }
         }
 
@@ -235,9 +246,71 @@ impl Object<Built> {
 pub struct BoundingBox {
     pub x: Range<f32>,
     pub y: Range<f32>,
+    pub z: Range<f32>,
 }
 
 impl BoundingBox {
+    fn bounds(&self) -> [Vec3; 2] {
+        [
+            Vec3::new(self.x.start, self.y.start, self.z.start),
+            Vec3::new(self.x.end, self.y.end, self.z.end),
+        ]
+    }
+
+    fn intersects(&self, ray: &Ray) -> bool {
+        let start = ray.start();
+
+        let invdir = 1. / *ray.dir();
+        let signs = Vec3::from(
+            Into::<[f32; 3]>::into(invdir)
+                .iter()
+                .map(|&v| (v < 0.) as u32 as f32)
+                .collect::<Vec<f32>>()
+                .as_slice(),
+        );
+        let bounds = self.bounds();
+
+        let mut txmin = (bounds[signs.x as usize].x - start.x) * invdir.x;
+        let mut txmax = (bounds[1 - signs.x as usize].x - start.x) * invdir.x;
+
+        let tymin = (bounds[signs.y as usize].y - start.y) * invdir.y;
+        let tymax = (bounds[1 - signs.y as usize].y - start.y) * invdir.y;
+
+        if (txmin > tymax) || (tymin > txmax) {
+            return false;
+        }
+
+        if tymin > txmin {
+            txmin = tymin;
+        }
+
+        if tymax < tymax {
+            txmax = tymax;
+        }
+
+        let tzmin = (bounds[signs.z as usize].z - start.z) * invdir.z;
+        let tzmax = (bounds[1 - signs.z as usize].z - start.z) * invdir.z;
+
+        if tzmin > txmin {
+            txmin = tzmin;
+        }
+
+        if tzmax < txmax {
+            txmax = tzmax;
+        }
+
+        let mut t = txmin;
+
+        if t < 0. {
+            t = txmax;
+            if t < 0. {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     fn stretch_to(&mut self, pos: &Vec3) {
         if pos.x < self.x.start {
             self.x.start = pos.x;
