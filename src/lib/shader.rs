@@ -3,13 +3,17 @@ use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 use crate::{color::Color, image::Image, vector::Vec3};
 
 #[derive(Debug)]
-struct Graph {
+pub struct Graph {
     root: Rc<RefCell<Node>>,
 }
 
 impl Graph {
     pub fn build(&mut self) {
         self.root.borrow_mut().build();
+    }
+
+    pub fn parse(code: &str) {
+        todo!()
     }
 }
 

@@ -1,0 +1,27 @@
+//! A parser for eray shader graph files
+program = _{ SOI ~ (def)* ~ (dec)* ~ (link)* ~ EOI }
+
+/// Custom node definition with input/output sockets
+def = { id ~ ":" ~ input ~ "->" ~ output ~ ";"? }
+/// Input sockets
+input = { "()" | var | ("|" ~ var_seq ~ "|") }
+/// Output sockets
+output = { var | ("(" ~ var_seq ~ ")") }
+
+/// Node declaration
+dec = { id ~ "=" ~ id ~ ";"? }
+/// Node linking from one's output to another's input
+link = { field ~ "->" ~ ("OUT" | field) ~ ";"? }
+
+var_seq = _{ (var ~ ("," ~ var)*)? }
+/// Single typed variable
+var = { id ~ ":" ~ ty }
+
+/// Node input/output access syntax
+field = { id ~ "." ~ id }
+
+id = @{ ASCII_ALPHANUMERIC+ }
+ty = @{ "Value" | "Color" | "Vec3" }
+
+WHITESPACE = _{ " " | "\t" | NEWLINE }
+COMMENT = _{ "#" ~ (!"#" ~ ANY)* ~ "#" }

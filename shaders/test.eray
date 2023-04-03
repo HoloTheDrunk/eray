@@ -1,0 +1,13 @@
+# Define custom nodes #
+white: () -> Fac: Value;
+add: |lhs: Value, rhs: Value| -> Fac: Value;
+
+# Declare nodes #
+A1 = white;
+A2 = white;
+B = add;
+
+# Link nodes #
+A1.Fac -> black.lhs;
+A2.Fac -> black.rhs;
+B.Fac -> OUT;
