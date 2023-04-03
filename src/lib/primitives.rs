@@ -1,26 +1,9 @@
-use crate::{object::Object, raycasting::Ray, vector::Vec3};
-
-#[derive(Clone, Debug, Default)]
-pub struct VertexIndices {
-    // Vertex position index in related object
-    pub position: usize,
-    // Vertex normal index in related object
-    pub normal: usize,
-}
+use crate::{raycasting::Ray, vector::Vec3};
 
 #[derive(Debug, Default)]
 pub struct Vertex {
     pub position: Vec3,
     pub normal: Vec3,
-}
-
-impl Vertex {
-    pub fn from_indices<State>(object: &Object<State>, indices: VertexIndices) -> Vertex {
-        Vertex {
-            position: object.vertices[indices.position],
-            normal: object.normals[indices.normal],
-        }
-    }
 }
 
 #[derive(Debug, Default)]
