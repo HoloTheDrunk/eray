@@ -5,7 +5,7 @@ use std::{
 
 use ::derive_more::{Add, AddAssign};
 
-#[derive(Clone, Copy, Default, Debug, Add, AddAssign)]
+#[derive(Clone, Copy, Default, Debug, Add, AddAssign, PartialEq)]
 pub struct Color {
     pub r: f32,
     pub g: f32,

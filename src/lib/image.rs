@@ -6,13 +6,32 @@ use std::{
 
 use super::color::Color;
 
-pub struct Image {
+#[derive(Clone, Debug, PartialEq)]
+pub struct Image<T> {
     pub width: u32,
     pub height: u32,
-    pub pixels: Vec<Color>,
+    pub pixels: Vec<T>,
 }
 
-impl Image {
+impl<T: Clone> Image<T> {
+    pub fn init(width: u32, height: u32, value: T) -> Self {
+        Self {
+            width,
+            height,
+            pixels: vec![value; (width * height) as usize],
+        }
+    }
+
+    pub fn mod_get(&self, x: u32, y: u32) -> T {
+        self.pixels[((y * self.width) % self.height + x % self.width) as usize].clone()
+    }
+
+    pub fn set(&mut self, x: u32, y: u32, value: T) {
+        self.pixels[(y * self.width + x) as usize] = value;
+    }
+}
+
+impl Image<Color> {
     pub fn save_as_ppm(&self, path: &Path) {
         let mut file = OpenOptions::new()
             .create(true)
@@ -39,10 +58,6 @@ impl Image {
         }
 
         writer.flush().unwrap();
-    }
-
-    pub fn set(&mut self, x: u32, y: u32, color: Color) {
-        self.pixels[(y * self.width + x) as usize] = color;
     }
 }
 

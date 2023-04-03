@@ -8,6 +8,7 @@ use std::{
 use crate::{
     primitives::{Triangle, Vertex},
     raycasting::{Ray, RaycastHit},
+    Building, Built,
 };
 
 use super::vector::Vec3;
@@ -17,17 +18,6 @@ pub struct OpenGLObject {
     pub vertices_vbo: u32,
     pub normals_vbo: u32,
 }
-
-macro_rules! states {
-    ($($state:tt),+ $(,)?) => {
-        $(
-            #[derive(Clone, Debug, Default)]
-            pub struct $state;
-        )+
-    };
-}
-
-states!(Building, Built);
 
 #[derive(Debug, Default)]
 pub struct Object<State> {

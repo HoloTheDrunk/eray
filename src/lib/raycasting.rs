@@ -31,6 +31,7 @@ impl Ray {
     }
 }
 
+#[derive(Debug)]
 pub struct RaycastHit {
     pub face_index: usize,
     pub position: Vec3,
