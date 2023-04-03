@@ -153,7 +153,15 @@ mod test {
     #[test]
     fn test_cross_product() {
         let (first, second) = get_vecs();
-        assert_eq!(first.cross_product(&second), Vec3::new(7.1, 4.4, 5.3));
+
+        let got = first.cross_product(&second);
+        let expected = Vec3::new(7.1, 4.4, 5.3);
+        let comp = (got - expected).len_sq();
+
+        assert!(
+            comp < 0.0001,
+            "Invalid cross product result {got:?}, expected {expected:?}"
+        );
     }
 
     #[test]

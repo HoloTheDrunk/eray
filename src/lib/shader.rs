@@ -7,6 +7,12 @@ struct Graph {
     root: Rc<RefCell<Node>>,
 }
 
+impl Graph {
+    pub fn build(&mut self) {
+        self.root.borrow_mut().build();
+    }
+}
+
 struct Node {
     name: String,
 
@@ -230,11 +236,7 @@ mod test {
                 "Test Shader",
                 std::iter::empty(),
                 std::iter::once(("Fac".to_owned(), SocketValue::Value(None))),
-                Box::new(|_inputs, outputs| {
-                    if let Some(fac) = outputs.get_mut("Fac") {
-                        fac.set_f32(50, 50, 1.);
-                    }
-                }),
+                Box::new(|_inputs, outputs| outputs.get_mut("Fac").unwrap().set_f32(50, 50, 1.)),
             ),
         };
 
