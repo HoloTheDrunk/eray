@@ -5,6 +5,8 @@ use std::{
 
 use ::derive_more::{Add, AddAssign};
 
+use crate::vector::Vec3;
+
 #[derive(Clone, Copy, Default, Debug, Add, AddAssign, PartialEq)]
 pub struct Color {
     pub r: f32,
@@ -73,5 +75,17 @@ impl Div<f32> for Color {
         self.b /= rhs;
 
         self
+    }
+}
+
+impl From<Vec3> for Color {
+    fn from(value: Vec3) -> Self {
+        Color::new(value.x, value.y, value.z)
+    }
+}
+
+impl From<f32> for Color {
+    fn from(value: f32) -> Self {
+        Color::new(value, value, value)
     }
 }

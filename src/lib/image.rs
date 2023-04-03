@@ -4,6 +4,8 @@ use std::{
     path::Path,
 };
 
+use crate::vector::Vec3;
+
 use super::color::Color;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -61,6 +63,26 @@ impl Image<Color> {
     }
 }
 
+impl From<Image<Vec3>> for Image<Color> {
+    fn from(value: Image<Vec3>) -> Self {
+        Self {
+            width: value.width,
+            height: value.height,
+            pixels: value.pixels.into_iter().map(|v| Color::from(v)).collect(),
+        }
+    }
+}
+
+impl From<Image<f32>> for Image<Color> {
+    fn from(value: Image<f32>) -> Self {
+        Self {
+            width: value.width,
+            height: value.height,
+            pixels: value.pixels.into_iter().map(|v| Color::from(v)).collect(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::process::Stdio;
@@ -79,39 +101,33 @@ mod test {
         for row in 0..height {
             for pixel in 0..width {
                 image.pixels[((height - row - 1) * width + pixel) as usize] = Color {
-                    r: (255 * pixel / width) as f32,
-                    g: (255 * row / height) as f32,
-                    b: {
-                        let y = 0.1 * row as f32;
-                        let x = 0.1 * pixel as f32;
-                        let v = ((y.sin() + 1.) / 2. + (x.cos() + 1.) / 2.) / 2. * 255.;
-
-                        let mask = v > 50.;
-
-                        v.powi(50) * mask as u32 as f32
-                    },
+                    r: pixel as f32 / width as f32,
+                    g: 1. - row as f32 / height as f32,
+                    b: 0.,
                 };
             }
         }
 
-        image.save_as_ppm(Path::new("test.ppm"));
-
-        if let Err(err) = std::fs::create_dir("output") {
+        if let Err(err) = std::fs::create_dir("tests") {
             if err.kind() != std::io::ErrorKind::AlreadyExists {
                 assert!(false, "Error creating output directory");
             }
         }
 
-        std::process::Command::new("ppmtojpeg")
-            .arg("test.ppm")
-            .stdout(Stdio::from(
-                OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .open("output/test.jpeg")
-                    .expect("Error creating jpeg"),
-            ))
-            .output()
-            .expect("Error converting image to jpeg");
+        image.save_as_ppm(Path::new("tests/test.ppm"));
+
+        if which::which("ppmtojpeg").is_ok() {
+            std::process::Command::new("ppmtojpeg")
+                .arg("test.ppm")
+                .stdout(Stdio::from(
+                    OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .open("tests/test.jpeg")
+                        .expect("Error creating jpeg"),
+                ))
+                .output()
+                .expect("Error converting image to jpeg");
+        }
     }
 }
