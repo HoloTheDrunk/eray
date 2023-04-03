@@ -138,6 +138,8 @@ impl Mul for Vec3 {
 
 #[cfg(test)]
 mod test {
+    use float_eq::assert_float_eq;
+
     use super::*;
 
     fn get_vecs() -> (Vec3, Vec3) {
@@ -147,7 +149,14 @@ mod test {
     #[test]
     fn test_dot_product() {
         let (first, second) = get_vecs();
-        assert_eq!(first * second, 2.8);
+        let got = first * second;
+        let expected = 2.8;
+        assert_float_eq!(
+            expected,
+            got,
+            abs <= 0.000_1,
+            "Invalid dot product result {got}, expected {expected}"
+        );
     }
 
     #[test]
@@ -159,7 +168,7 @@ mod test {
         let comp = (got - expected).len_sq();
 
         assert!(
-            comp < 0.0001,
+            comp < 0.000_1,
             "Invalid cross product result {got:?}, expected {expected:?}"
         );
     }
@@ -169,9 +178,13 @@ mod test {
         let (first, second) = get_vecs();
 
         let got = first.angle_to(&second);
-        let expected = 1.294;
-        let comp = (got - expected).abs();
+        let expected = 1.2949;
 
-        assert!(comp < 0.001, "Invalid angle {got}, expected {expected}");
+        assert_float_eq!(
+            expected,
+            got,
+            abs <= 0.000_1,
+            "Invalid angle {got}, expected {expected}"
+        );
     }
 }

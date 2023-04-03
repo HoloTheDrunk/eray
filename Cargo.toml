@@ -17,6 +17,7 @@ thiserror = "1.0"
 
 [dev-dependencies]
 which = "4.4"
+float_eq = { version = "1.0", features = ["derive"] }
 
 [lib]
 path = "src/lib/lib.rs"
