@@ -1,5 +1,15 @@
-//! A parser for eray shader graph files
-program = _{ SOI ~ (def)* ~ (dec)* ~ (link)* ~ EOI }
+//! Parser for eray shader graph files
+program = _{ SOI ~ signature ~ defs ~ decs ~ links ~ EOI }
+
+
+/// Inputs and outputs of the node described by this .eray file
+signature = { input ~ "->" ~ output ~ ";"? }
+
+
+defs = { def* }
+decs = { dec* }
+links = { link* }
+
 
 /// Custom node definition with input/output sockets
 def = { id ~ ":" ~ input ~ "->" ~ output ~ ";"? }
@@ -8,20 +18,49 @@ input = { "()" | var | ("|" ~ var_seq ~ "|") }
 /// Output sockets
 output = { var | ("(" ~ var_seq ~ ")") }
 
+
 /// Node declaration
-dec = { id ~ "=" ~ id ~ ";"? }
+/// An `@` symbol denotes a custom node (avoid shadowing regular node)
+dec = { id ~ "=" ~ node_ref ~ ";"? }
 /// Node linking from one's output to another's input
-link = { field ~ "->" ~ ("OUT" | field) ~ ";"? }
+link = { (expr | field) ~ "->" ~ field ~ ";"? }
+
 
 var_seq = _{ (var ~ ("," ~ var)*)? }
 /// Single typed variable
 var = { id ~ ":" ~ ty }
 
-/// Node input/output access syntax
-field = { id ~ "." ~ id }
 
-id = @{ ASCII_ALPHANUMERIC+ }
+/// Literal value of a valid type (ty)
+expr = { ty ~ "(" ~ (field | literal) ~ ")" ~ ("." ~ id)* }
+
+/// Node input/output access syntax
+field = { (id | meta) ~ ("." ~ id)+ }
+
+/// Meta-variable
+meta = @{ "@" ~ ("IN" | "OUT") }
+
+/// Reference to a node during node declaration
+node_ref = _{ "$"? ~ id }
+
+
+/// Identifier
+id = @{ ASCII_ALPHA ~ ASCII_ALPHANUMERIC* }
+/// Data type
 ty = @{ "Value" | "Color" | "Vec3" }
+
+
+/// Literal value
+literal = { vector | value }
+
+/// Float
+value = { number }
+/// Vec3
+vector = { number ~ ("," ~ number){2} }
+
+
+/// Floating-point number
+number = @{ (ASCII_DIGIT | "_")+ ~ ("." ~ (ASCII_DIGIT | "_")*)? }
 
 WHITESPACE = _{ " " | "\t" | NEWLINE }
 COMMENT = _{ "#" ~ (!"#" ~ ANY)* ~ "#" }

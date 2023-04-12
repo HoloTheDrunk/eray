@@ -1,0 +1,23 @@
+# Node's inputs and outputs #
+| x: Value, y: Value | -> ( value: Value );
+
+# Define custom nodes expected to be loaded #
+noise: |x: Value, y: Value| -> value: Value;
+add: |lhs: Vec3, rhs: Color| -> value: Value;
+
+# Declare nodes #
+Noise = $noise;
+B = add;
+C = $add;
+
+# Link node sockets #
+@IN.x -> Noise.x;
+@IN.y -> Noise.y;
+
+Noise.value -> B.lhs;
+Vec3(@IN.x).y -> B.rhs;
+
+B.value -> C.lhs;
+Color(1, 1, 1) -> C.rhs;
+
+C.value -> @OUT.value;
