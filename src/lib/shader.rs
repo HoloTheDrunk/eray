@@ -3,11 +3,14 @@ use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 use crate::{color::Color, image::Image, vector::Vec3};
 
 #[derive(Debug)]
-pub struct Graph {
+pub struct Graph<'names> {
+    inputs: HashMap<&'names str, Box<dyn OutSocket>>,
+    outputs: HashMap<&'names str, InSocket>,
+
     root: Rc<RefCell<Node>>,
 }
 
-impl Graph {
+impl Graph<'_> {
     pub fn build(&mut self) {
         self.root.borrow_mut().build();
     }
@@ -21,9 +24,9 @@ struct Node {
     name: String,
 
     inputs: Vec<InSocket>,
-    outputs: Vec<OutSocket>,
+    outputs: Vec<Box<dyn OutSocket>>,
 
-    shader: Box<dyn Fn(&HashMap<&str, &SocketValue>, &mut HashMap<&str, &mut SocketValue>)>,
+    shader: Box<dyn Fn(&HashMap<&str, &SocketValue>, &mut HashMap<String, &mut SocketValue>)>,
 }
 
 impl Debug for Node {
@@ -40,7 +43,7 @@ impl Node {
         name: &str,
         inputs: impl Iterator<Item = (String, SocketValue)>,
         outputs: impl Iterator<Item = (String, SocketValue)>,
-        shader: Box<dyn Fn(&HashMap<&str, &SocketValue>, &mut HashMap<&str, &mut SocketValue>)>,
+        shader: Box<dyn Fn(&HashMap<&str, &SocketValue>, &mut HashMap<String, &mut SocketValue>)>,
     ) -> Rc<RefCell<Self>> {
         let res = Rc::new(RefCell::new(Self {
             name: name.to_owned(),
@@ -55,15 +58,15 @@ impl Node {
             shader,
         }));
 
-        res.borrow_mut().outputs.extend(
-            outputs
-                .map(|(name, value)| OutSocket {
+        res.borrow_mut()
+            .outputs
+            .extend(outputs.map(|(name, value)| -> Box<dyn OutSocket> {
+                Box::new(NodeOutSocket {
                     node: res.clone(),
                     name,
                     value,
                 })
-                .collect::<Vec<_>>(),
-        );
+            }));
 
         res
     }
@@ -73,8 +76,10 @@ impl Node {
             .iter_mut()
             .filter(|socket| socket.value.is_none())
             .for_each(|socket| {
-                if let Some(out_socket) = socket.prev.as_ref().map(|refcell| refcell.borrow_mut()) {
-                    out_socket.node.borrow_mut().build();
+                if let Some(mut out_socket) =
+                    socket.prev.as_ref().map(|refcell| refcell.borrow_mut())
+                {
+                    out_socket.compute_value();
                 } else {
                     socket.value = socket.value.get_default();
                 }
@@ -89,7 +94,7 @@ impl Node {
             &mut self
                 .outputs
                 .iter_mut()
-                .map(|v| (v.name.as_str(), &mut v.value))
+                .map(|v| (v.name().to_string(), v.value_mut()))
                 .collect(),
         );
     }
@@ -97,20 +102,27 @@ impl Node {
 
 #[derive(Debug)]
 struct InSocket {
-    prev: Option<RefCell<OutSocket>>,
+    prev: Option<RefCell<Box<dyn OutSocket>>>,
 
     name: String,
     value: SocketValue,
 }
 
-struct OutSocket {
+trait OutSocket: Debug {
+    fn compute_value(&mut self) -> &SocketValue;
+    fn name(&self) -> &str;
+    fn value(&self) -> &SocketValue;
+    fn value_mut(&mut self) -> &mut SocketValue;
+}
+
+struct NodeOutSocket {
     node: Rc<RefCell<Node>>,
 
     name: String,
     value: SocketValue,
 }
 
-impl Debug for OutSocket {
+impl Debug for NodeOutSocket {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("OutSocket")
             .field("name", &self.name)
@@ -119,13 +131,25 @@ impl Debug for OutSocket {
     }
 }
 
-impl OutSocket {
-    pub fn compute_value(&mut self) -> &SocketValue {
+impl OutSocket for NodeOutSocket {
+    fn compute_value(&mut self) -> &SocketValue {
         if self.value.is_none() {
             self.node.borrow_mut().build();
         };
 
         &self.value
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn value(&self) -> &SocketValue {
+        &self.value
+    }
+
+    fn value_mut(&mut self) -> &mut SocketValue {
+        &mut self.value
     }
 }
 
@@ -236,6 +260,8 @@ mod test {
     #[test]
     fn test_valid_shader_compilation() {
         let shader = Graph {
+            inputs: Default::default(),
+            outputs: Default::default(),
             root: Node::new(
                 "Test Shader",
                 std::iter::empty(),
@@ -244,10 +270,10 @@ mod test {
             ),
         };
 
-        let prev = shader.root.borrow().outputs[0].value.clone();
+        let prev = shader.root.borrow().outputs[0].value().clone();
 
         shader.root.borrow_mut().build();
 
-        assert_ne!(prev, shader.root.borrow().outputs[0].value);
+        assert_ne!(prev, *shader.root.borrow().outputs[0].value());
     }
 }
