@@ -1,2 +1,2 @@
-mod parsing;
-mod shader;
+pub mod parsing;
+pub mod shader;

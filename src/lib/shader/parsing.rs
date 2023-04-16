@@ -29,26 +29,23 @@ use {
 //     };
 // }
 
-type PResult<T> = Result<T, self::Error>;
+pub type PResult<T> = Result<T, self::Error>;
 
 #[derive(Debug, Clone)]
-struct Error(ErrorType);
-
-#[derive(Debug, Clone)]
-enum ErrorType {
+pub enum Error {
     Parsing(pest::error::Error<Rule>),
     Code(CodeError, Section),
 }
 
 #[derive(Debug, Clone)]
-enum CodeError {
+pub enum CodeError {
     Redefinition(String),
     Undefined(String),
     Type(String, String),
 }
 
 #[derive(Debug, Clone)]
-enum Section {
+pub enum Section {
     Unknown,
     Signature,
     Imports,
@@ -62,38 +59,30 @@ struct SParser;
 
 type NodeMap<'names> = HashMap<&'names str, Rc<RefCell<Node>>>;
 
-fn parse_shader(eray: &str) -> PResult<()> {
-    let mut nodes = NodeMap::new();
-
-    let mut pairs =
-        SParser::parse(Rule::program, eray).map_err(|err| Error(ErrorType::Parsing(err)))?;
+/// Constructs a [GraphInput] from the eray code passed as input
+pub fn parse_shader(eray: &str) -> PResult<()> {
+    let mut pairs = SParser::parse(Rule::program, eray).map_err(|err| Error::Parsing(err))?;
 
     let program = pairs.next().unwrap();
     recursive_print(Some(&program), 0);
-    parse_program(program, &mut nodes)?;
+    parse_program(program)?;
 
     Ok(())
 }
 
-fn parse_program(program: Pair<Rule>, nodes: &mut NodeMap) -> PResult<()> {
-    for section in program.into_inner() {
-        match section.as_rule() {
-            Rule::signature => {
-                dbg!(parse_signature(section, nodes)?);
-            }
-            Rule::defs => todo!(),
-            Rule::decs => todo!(),
-            Rule::links => todo!(),
-            rule => unreachable!("{rule:?}"),
-        }
-    }
+fn parse_program(program: Pair<Rule>) -> PResult<()> {
+    let mut inner = program.into_inner();
+
+    let signature = dbg!(parse_signature(inner.next().unwrap())?);
+    // let imports = dbg!(parse_imports(inner.next().unwrap())?);
+    // let mut nodes = dbg!(parse_nodes(inner.next().unwrap())?);
+    // parse_links(inner.next().unwrap(), &mut nodes)?;
 
     Ok(())
 }
 
 fn parse_signature(
     signature: Pair<Rule>,
-    nodes: &mut NodeMap,
 ) -> PResult<(HashMap<String, GraphInput>, HashMap<String, InSocket>)> {
     let mut inner = signature.into_inner();
 
@@ -110,10 +99,7 @@ fn parse_input(input: Pair<Rule>) -> PResult<HashMap<String, GraphInput>> {
         let (id, ty) = parse_var(var);
 
         if let Some(_) = res.insert(id.clone(), GraphInput::new(id.clone(), ty)) {
-            return Err(Error(ErrorType::Code(
-                CodeError::Redefinition(id),
-                Section::Signature,
-            )));
+            return Err(Error::Code(CodeError::Redefinition(id), Section::Signature));
         }
     }
 
@@ -127,10 +113,7 @@ fn parse_output(output: Pair<Rule>) -> PResult<HashMap<String, InSocket>> {
         let (id, ty) = parse_var(var);
 
         if let Some(_) = res.insert(id.clone(), InSocket::new(id.clone(), ty)) {
-            return Err(Error(ErrorType::Code(
-                CodeError::Redefinition(id),
-                Section::Signature,
-            )));
+            return Err(Error::Code(CodeError::Redefinition(id), Section::Signature));
         }
     }
 
@@ -179,6 +162,6 @@ mod test {
     fn signature_parse() {
         let code = "|a: Value| -> (a: Value)";
 
-        assert!(parse_shader(code).is_ok())
+        assert!(parse_shader(code).is_ok());
     }
 }
