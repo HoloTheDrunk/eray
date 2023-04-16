@@ -4,7 +4,7 @@ use crate::{color::Color, image::Image, vector::Vec3};
 
 #[derive(Debug)]
 pub struct Graph<'names> {
-    inputs: HashMap<&'names str, Box<dyn OutSocket>>,
+    inputs: HashMap<&'names str, GraphInput>,
     outputs: HashMap<&'names str, InSocket>,
 
     root: Rc<RefCell<Node>>,
@@ -81,7 +81,7 @@ impl Node {
                 {
                     out_socket.compute_value();
                 } else {
-                    socket.value = socket.value.get_default();
+                    socket.value.set_default();
                 }
             });
 
@@ -153,6 +153,34 @@ impl OutSocket for NodeOutSocket {
     }
 }
 
+#[derive(Debug)]
+struct GraphInput {
+    name: String,
+    value: SocketValue,
+}
+
+impl OutSocket for GraphInput {
+    fn compute_value(&mut self) -> &SocketValue {
+        if self.value.is_none() {
+            self.value.set_default();
+        }
+
+        &self.value
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn value(&self) -> &SocketValue {
+        &self.value
+    }
+
+    fn value_mut(&mut self) -> &mut SocketValue {
+        &mut self.value
+    }
+}
+
 #[derive(Clone, Debug)]
 enum SocketValue {
     Value(Option<Image<f32>>),
@@ -169,11 +197,15 @@ impl SocketValue {
         }
     }
 
-    pub fn get_default(&self) -> Self {
+    pub fn set_default(&mut self) -> Self {
         match self {
-            SocketValue::Value(_) => SocketValue::Value(Some(Image::init(1, 1, 0.))),
-            SocketValue::Color(_) => SocketValue::Color(Some(Image::init(1, 1, Color::default()))),
-            SocketValue::Vec3(_) => SocketValue::Vec3(Some(Image::init(1, 1, Vec3::default()))),
+            SocketValue::Value(ref mut value) => SocketValue::Value(Some(Image::init(1, 1, 0.))),
+            SocketValue::Color(ref mut color) => {
+                SocketValue::Color(Some(Image::init(1, 1, Color::default())))
+            }
+            SocketValue::Vec3(ref mut vec3) => {
+                SocketValue::Vec3(Some(Image::init(1, 1, Vec3::default())))
+            }
         }
     }
 
