@@ -1,18 +1,18 @@
 //! Parser for eray shader graph files
-program = { SOI ~ signature ~ defs ~ decs ~ links ~ EOI }
+program = { SOI ~ signature ~ imports ~ nodes ~ links ~ EOI }
 
 
 /// Inputs and outputs of the node described by this .eray file
 signature = { input ~ "->" ~ output ~ ";"? }
 
 
-defs = { def* }
-decs = { dec* }
+imports = { import* }
+nodes = { node* }
 links = { link* }
 
 
-/// Custom node definition with input/output sockets
-def = { id ~ ":" ~ input ~ "->" ~ output ~ ";"? }
+/// Custom node import
+import = { id ~ ":" ~ input ~ "->" ~ output ~ ";"? }
 /// Input sockets
 input = { "()" | var | ("|" ~ var_seq ~ "|") }
 /// Output sockets
@@ -21,7 +21,7 @@ output = { var | ("(" ~ var_seq ~ ")") }
 
 /// Node declaration
 /// An `@` symbol denotes a custom node (avoid shadowing regular node)
-dec = { id ~ "=" ~ node_ref ~ ";"? }
+node = { id ~ "=" ~ node_ref ~ ";"? }
 /// Node linking from one's output to another's input
 link = { (expr | field) ~ "->" ~ field ~ ";"? }
 
