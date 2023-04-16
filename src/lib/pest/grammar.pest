@@ -1,5 +1,5 @@
 //! Parser for eray shader graph files
-program = _{ SOI ~ signature ~ defs ~ decs ~ links ~ EOI }
+program = { SOI ~ signature ~ defs ~ decs ~ links ~ EOI }
 
 
 /// Inputs and outputs of the node described by this .eray file

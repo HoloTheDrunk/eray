@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, str::FromStr};
 
 use crate::{color::Color, image::Image, vector::Vec3};
 
@@ -20,7 +20,7 @@ impl Graph<'_> {
     }
 }
 
-struct Node {
+pub struct Node {
     name: String,
 
     inputs: Vec<InSocket>,
@@ -101,21 +101,31 @@ impl Node {
 }
 
 #[derive(Debug)]
-struct InSocket {
-    prev: Option<RefCell<Box<dyn OutSocket>>>,
+pub struct InSocket {
+    pub prev: Option<RefCell<Box<dyn OutSocket>>>,
 
-    name: String,
-    value: SocketValue,
+    pub name: String,
+    pub value: SocketValue,
 }
 
-trait OutSocket: Debug {
+impl InSocket {
+    pub fn new(name: String, value: SocketValue) -> Self {
+        Self {
+            prev: None,
+            name,
+            value,
+        }
+    }
+}
+
+pub trait OutSocket: Debug {
     fn compute_value(&mut self) -> &SocketValue;
     fn name(&self) -> &str;
     fn value(&self) -> &SocketValue;
     fn value_mut(&mut self) -> &mut SocketValue;
 }
 
-struct NodeOutSocket {
+pub struct NodeOutSocket {
     node: Rc<RefCell<Node>>,
 
     name: String,
@@ -154,9 +164,15 @@ impl OutSocket for NodeOutSocket {
 }
 
 #[derive(Debug)]
-struct GraphInput {
+pub struct GraphInput {
     name: String,
     value: SocketValue,
+}
+
+impl GraphInput {
+    pub fn new(name: String, value: SocketValue) -> Self {
+        GraphInput { name, value }
+    }
 }
 
 impl OutSocket for GraphInput {
@@ -182,10 +198,23 @@ impl OutSocket for GraphInput {
 }
 
 #[derive(Clone, Debug)]
-enum SocketValue {
+pub enum SocketValue {
     Value(Option<Image<f32>>),
     Color(Option<Image<Color>>),
     Vec3(Option<Image<Vec3>>),
+}
+
+impl FromStr for SocketValue {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "Value" => SocketValue::Value(None),
+            "Color" => SocketValue::Color(None),
+            "Vec3" => SocketValue::Vec3(None),
+            other => Err(format!("Unrecognized type `{other}`."))?,
+        })
+    }
 }
 
 impl SocketValue {
