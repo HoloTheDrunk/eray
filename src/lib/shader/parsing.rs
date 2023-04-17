@@ -59,6 +59,18 @@ struct SParser;
 
 type NodeMap<'names> = HashMap<&'names str, Rc<RefCell<Node>>>;
 
+#[derive(Debug)]
+struct Import {
+    name: String,
+    signature: Signature,
+}
+
+#[derive(Debug)]
+struct Signature {
+    input: HashMap<String, GraphInput>,
+    output: HashMap<String, InSocket>,
+}
+
 /// Constructs a [GraphInput] from the eray code passed as input
 pub fn parse_shader(eray: &str) -> PResult<()> {
     let mut pairs = SParser::parse(Rule::program, eray).map_err(|err| Error::Parsing(err))?;
@@ -74,23 +86,41 @@ fn parse_program(program: Pair<Rule>) -> PResult<()> {
     let mut inner = program.into_inner();
 
     let signature = dbg!(parse_signature(inner.next().unwrap())?);
-    // let imports = dbg!(parse_imports(inner.next().unwrap())?);
+    let imports = dbg!(parse_imports(inner.next().unwrap())?);
     // let mut nodes = dbg!(parse_nodes(inner.next().unwrap())?);
     // parse_links(inner.next().unwrap(), &mut nodes)?;
 
     Ok(())
 }
 
-fn parse_signature(
-    signature: Pair<Rule>,
-) -> PResult<(HashMap<String, GraphInput>, HashMap<String, InSocket>)> {
+fn parse_signature(signature: Pair<Rule>) -> PResult<Signature> {
     let mut inner = signature.into_inner();
 
     let input = parse_input(inner.next().unwrap())?;
     let output = parse_output(inner.next().unwrap())?;
 
-    Ok((input, output))
+    Ok(Signature { input, output })
 }
+
+fn parse_imports(imports: Pair<Rule>) -> PResult<Vec<Import>> {
+    Ok(imports
+        .into_inner()
+        .map(parse_import)
+        .collect::<PResult<_>>()?)
+}
+
+fn parse_import(import: Pair<Rule>) -> PResult<Import> {
+    let mut inner = import.into_inner();
+
+    Ok(Import {
+        name: inner.next().unwrap().as_str().to_owned(),
+        signature: parse_signature(inner.next().unwrap())?,
+    })
+}
+
+// fn parse_nodes(nodes: Pair<Rule>) -> PResult<NodeMap> {
+//
+// }
 
 fn parse_input(input: Pair<Rule>) -> PResult<HashMap<String, GraphInput>> {
     let mut res = HashMap::<String, GraphInput>::new();
