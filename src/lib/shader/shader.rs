@@ -1,6 +1,8 @@
-use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, str::FromStr};
+use super::{Signature, Type};
 
 use crate::{color::Color, image::Image, vector::Vec3};
+
+use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
 #[derive(Debug)]
 pub struct Graph<'names> {
@@ -69,6 +71,25 @@ impl Node {
             }));
 
         res
+    }
+
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    pub fn signature(&self) -> Signature {
+        Signature {
+            input: self
+                .inputs
+                .iter()
+                .map(|in_socket| (in_socket.name.clone(), in_socket.value.r#type()))
+                .collect(),
+            output: self
+                .outputs
+                .iter()
+                .map(|out_socket| (out_socket.name().to_owned(), out_socket.value().r#type()))
+                .collect(),
+        }
     }
 
     pub fn build(&mut self) {
@@ -204,16 +225,13 @@ pub enum SocketValue {
     Vec3(Option<Image<Vec3>>),
 }
 
-impl FromStr for SocketValue {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            "Value" => SocketValue::Value(None),
-            "Color" => SocketValue::Color(None),
-            "Vec3" => SocketValue::Vec3(None),
-            other => Err(format!("Unrecognized type `{other}`."))?,
-        })
+impl From<Type> for SocketValue {
+    fn from(r#type: Type) -> Self {
+        match r#type {
+            Type::Value => SocketValue::Value(None),
+            Type::Vec3 => SocketValue::Vec3(None),
+            Type::Color => SocketValue::Color(None),
+        }
     }
 }
 
@@ -226,15 +244,19 @@ impl SocketValue {
         }
     }
 
-    pub fn set_default(&mut self) -> Self {
+    pub(super) fn r#type(&self) -> Type {
         match self {
-            SocketValue::Value(ref mut value) => SocketValue::Value(Some(Image::init(1, 1, 0.))),
-            SocketValue::Color(ref mut color) => {
-                SocketValue::Color(Some(Image::init(1, 1, Color::default())))
-            }
-            SocketValue::Vec3(ref mut vec3) => {
-                SocketValue::Vec3(Some(Image::init(1, 1, Vec3::default())))
-            }
+            SocketValue::Value(_) => Type::Value,
+            SocketValue::Color(_) => Type::Color,
+            SocketValue::Vec3(_) => Type::Vec3,
+        }
+    }
+
+    pub fn set_default(&mut self) {
+        match self {
+            SocketValue::Value(ref mut value) => *value = Some(Image::init(1, 1, 0.)),
+            SocketValue::Color(ref mut color) => *color = Some(Image::init(1, 1, Color::default())),
+            SocketValue::Vec3(ref mut vec3) => *vec3 = Some(Image::init(1, 1, Vec3::default())),
         }
     }
 

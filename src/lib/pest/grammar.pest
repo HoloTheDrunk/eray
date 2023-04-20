@@ -12,7 +12,7 @@ links = { link* }
 
 
 /// Custom node import
-import = { id ~ ":" ~ input ~ "->" ~ output ~ ";"? }
+import = { id ~ ":" ~ signature }
 /// Input sockets
 input = { "()" | var | ("|" ~ var_seq ~ "|") }
 /// Output sockets

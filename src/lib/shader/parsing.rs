@@ -1,8 +1,13 @@
-use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, str::FromStr};
+use pest::iterators::Pairs;
+
+use super::{
+    shader::{Node, SocketValue},
+    GraphSignature, Signature, Type,
+};
 
 use crate::shader::shader::{GraphInput, InSocket};
 
-use super::shader::{Node, SocketValue};
+use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, str::FromStr};
 
 use {
     pest::{iterators::Pair, Parser},
@@ -41,6 +46,7 @@ pub enum Error {
 pub enum CodeError {
     Redefinition(String),
     Undefined(String),
+    SignatureMismatch(Signature, Signature),
     Type(String, String),
 }
 
@@ -65,51 +71,64 @@ struct Import {
     signature: Signature,
 }
 
-#[derive(Debug)]
-struct Signature {
-    input: HashMap<String, GraphInput>,
-    output: HashMap<String, InSocket>,
-}
-
 /// Constructs a [GraphInput] from the eray code passed as input
-pub fn parse_shader(eray: &str) -> PResult<()> {
+pub fn parse_shader(eray: &str, loaded: &mut HashMap<String, Rc<RefCell<Node>>>) -> PResult<()> {
     let mut pairs = SParser::parse(Rule::program, eray).map_err(|err| Error::Parsing(err))?;
 
     let program = pairs.next().unwrap();
     recursive_print(Some(&program), 0);
-    parse_program(program)?;
+    parse_program(program, loaded)?;
 
     Ok(())
 }
 
-fn parse_program(program: Pair<Rule>) -> PResult<()> {
+fn parse_program(
+    program: Pair<Rule>,
+    loaded: &mut HashMap<String, Rc<RefCell<Node>>>,
+) -> PResult<()> {
     let mut inner = program.into_inner();
 
     let signature = dbg!(parse_signature(inner.next().unwrap())?);
-    let imports = dbg!(parse_imports(inner.next().unwrap())?);
-    // let mut nodes = dbg!(parse_nodes(inner.next().unwrap())?);
+    let imports = dbg!(parse_imports(inner.next().unwrap(), loaded)?);
+    // let mut nodes =
+    // dbg!(parse_nodes(inner.next().unwrap())?);
     // parse_links(inner.next().unwrap(), &mut nodes)?;
 
     Ok(())
 }
 
-fn parse_signature(signature: Pair<Rule>) -> PResult<Signature> {
-    let mut inner = signature.into_inner();
-
-    let input = parse_input(inner.next().unwrap())?;
-    let output = parse_output(inner.next().unwrap())?;
-
-    Ok(Signature { input, output })
-}
-
-fn parse_imports(imports: Pair<Rule>) -> PResult<Vec<Import>> {
+fn parse_imports(
+    imports: Pair<Rule>,
+    loaded: &mut HashMap<String, Rc<RefCell<Node>>>,
+) -> PResult<Vec<Import>> {
     Ok(imports
         .into_inner()
-        .map(parse_import)
+        .map(|import| {
+            parse_import(dbg!(import)).map(|import| {
+                // Check that the required node has been loaded
+                if let Some(loaded) = loaded.get(&import.name) {
+                    if import.signature == loaded.borrow().signature() {
+                        return Ok(import);
+                    }
+
+                    Err(Error::Code(
+                        CodeError::SignatureMismatch(import.signature, loaded.borrow().signature()),
+                        Section::Imports,
+                    ))?;
+                }
+
+                Err(Error::Code(
+                    CodeError::Undefined(import.name),
+                    Section::Imports,
+                ))
+            })
+        })
+        .flatten()
         .collect::<PResult<_>>()?)
 }
 
 fn parse_import(import: Pair<Rule>) -> PResult<Import> {
+    dbg!(&import);
     let mut inner = import.into_inner();
 
     Ok(Import {
@@ -122,13 +141,23 @@ fn parse_import(import: Pair<Rule>) -> PResult<Import> {
 //
 // }
 
-fn parse_input(input: Pair<Rule>) -> PResult<HashMap<String, GraphInput>> {
-    let mut res = HashMap::<String, GraphInput>::new();
+fn parse_signature(signature: Pair<Rule>) -> PResult<Signature> {
+    let mut inner = signature.into_inner();
+
+    let input = dbg!(parse_input(inner.next().unwrap())?);
+    let output = dbg!(parse_output(inner.next().unwrap())?);
+
+    Ok(Signature { input, output })
+}
+
+fn parse_input(input: Pair<Rule>) -> PResult<HashMap<String, Type>> {
+    dbg!(&input);
+    let mut res = HashMap::<String, Type>::new();
 
     for var in input.into_inner() {
         let (id, ty) = parse_var(var);
 
-        if let Some(_) = res.insert(id.clone(), GraphInput::new(id.clone(), ty)) {
+        if let Some(_) = res.insert(id.clone(), ty) {
             return Err(Error::Code(CodeError::Redefinition(id), Section::Signature));
         }
     }
@@ -136,13 +165,13 @@ fn parse_input(input: Pair<Rule>) -> PResult<HashMap<String, GraphInput>> {
     Ok(res)
 }
 
-fn parse_output(output: Pair<Rule>) -> PResult<HashMap<String, InSocket>> {
-    let mut res = HashMap::<String, InSocket>::new();
+fn parse_output(output: Pair<Rule>) -> PResult<HashMap<String, Type>> {
+    let mut res = HashMap::<String, Type>::new();
 
     for var in output.into_inner() {
         let (id, ty) = parse_var(var);
 
-        if let Some(_) = res.insert(id.clone(), InSocket::new(id.clone(), ty)) {
+        if let Some(_) = res.insert(id.clone(), ty) {
             return Err(Error::Code(CodeError::Redefinition(id), Section::Signature));
         }
     }
@@ -150,12 +179,20 @@ fn parse_output(output: Pair<Rule>) -> PResult<HashMap<String, InSocket>> {
     Ok(res)
 }
 
-fn parse_var(var: Pair<Rule>) -> (String, SocketValue) {
-    let mut inner = var.into_inner();
+fn parse_vars(vars: &mut Pairs<Rule>) -> PResult<Vec<(String, Type)>> {
+    let mut res = Vec::new();
+
+    dbg!(vars).for_each(|var| res.push(parse_var(var)));
+
+    Ok(res)
+}
+
+fn parse_var(var: Pair<Rule>) -> (String, Type) {
+    let mut inner = dbg!(var).into_inner();
 
     (
         inner.next().unwrap().as_str().to_owned(),
-        SocketValue::from_str(inner.next().unwrap().as_str()).unwrap(),
+        Type::from_str(inner.next().unwrap().as_str()).unwrap(),
     )
 }
 
@@ -192,6 +229,44 @@ mod test {
     fn signature_parse() {
         let code = "|a: Value| -> (a: Value)";
 
-        assert!(parse_shader(code).is_ok());
+        assert!(parse_shader(code, &mut HashMap::new()).is_ok());
+    }
+
+    #[test]
+    fn full_parse() {
+        let code = std::fs::read_to_string("nodes/test.eray")
+            .expect("Missing `nodes/test.eray` test shader");
+
+        let mut loaded = HashMap::new();
+        for node in vec![
+            Node::new(
+                "add",
+                vec![
+                    ("lhs".to_owned(), SocketValue::from(Type::Vec3)),
+                    ("rhs".to_owned(), SocketValue::from(Type::Color)),
+                ]
+                .into_iter(),
+                vec![("value".to_owned(), SocketValue::from(Type::Value))].into_iter(),
+                Box::new(|_input, _output| ()),
+            ),
+            Node::new(
+                "noise",
+                vec![
+                    ("x".to_owned(), SocketValue::from(Type::Value)),
+                    ("y".to_owned(), SocketValue::from(Type::Value)),
+                ]
+                .into_iter(),
+                vec![("value".to_owned(), SocketValue::from(Type::Value))].into_iter(),
+                Box::new(|_input, _output| ()),
+            ),
+        ]
+        .into_iter()
+        {
+            let name = node.borrow().name();
+            loaded.insert(name, node);
+        }
+
+        let res = parse_shader(code.as_str(), &mut loaded);
+        assert!(res.is_ok(), "{res:?}");
     }
 }
