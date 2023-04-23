@@ -1,4 +1,4 @@
-use pest::iterators::Pairs;
+use pest::{error::LineColLocation, iterators::Pairs, Position, Span};
 
 use super::{
     shader::{Node, SocketValue},
@@ -7,7 +7,13 @@ use super::{
 
 use crate::shader::shader::{GraphInput, InSocket};
 
-use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, str::FromStr};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    fmt::{Debug, Display},
+    rc::Rc,
+    str::FromStr,
+};
 
 use {
     pest::{iterators::Pair, Parser},
@@ -37,17 +43,39 @@ use {
 pub type PResult<T> = Result<T, self::Error>;
 
 #[derive(Debug, Clone)]
-pub enum Error {
+pub struct Error {
+    kind: ErrorKind,
+    line: LineColLocation,
+}
+
+impl Error {
+    fn new(kind: ErrorKind, line: LineColLocation) -> Self {
+        Self { kind, line }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ErrorKind {
     Parsing(pest::error::Error<Rule>),
-    Code(CodeError, Section),
+    Code { r#type: CodeError, section: Section },
 }
 
 #[derive(Debug, Clone)]
 pub enum CodeError {
     Redefinition(String),
-    Undefined(String),
+    Undefined {
+        got: String,
+        guess: Option<String>,
+        variant: UndefinedError,
+    },
     SignatureMismatch(String, Signature, Signature),
     Type(String, String),
+}
+
+#[derive(Debug, Clone)]
+pub enum UndefinedError {
+    Undefined,
+    NotImported { node_name: String },
 }
 
 #[derive(Debug, Clone)]
@@ -63,7 +91,7 @@ pub enum Section {
 #[grammar = "lib/pest/grammar.pest"]
 struct SParser;
 
-type NodeMap<'names> = HashMap<&'names str, Rc<RefCell<Node>>>;
+type NodeMap = HashMap<String, Rc<RefCell<Node>>>;
 
 #[derive(Debug)]
 struct Import {
@@ -73,7 +101,8 @@ struct Import {
 
 /// Constructs a [GraphInput] from the eray code passed as input
 pub fn parse_shader(eray: &str, loaded: &mut HashMap<String, Rc<RefCell<Node>>>) -> PResult<()> {
-    let mut pairs = SParser::parse(Rule::program, eray).map_err(|err| Error::Parsing(err))?;
+    let mut pairs = SParser::parse(Rule::program, eray)
+        .map_err(|err| Error::new(ErrorKind::Parsing(err.clone()), err.line_col))?;
 
     let program = pairs.next().unwrap();
     recursive_print(Some(&program), 0);
@@ -90,11 +119,20 @@ fn parse_program(
 
     let signature = parse_signature(inner.next().unwrap())?;
     let imports = parse_imports(inner.next().unwrap(), loaded)?;
-    // let mut nodes =
-    // dbg!(parse_nodes(inner.next().unwrap())?);
+    let mut nodes = parse_nodes(inner.next().unwrap(), loaded, &imports)?;
     // parse_links(inner.next().unwrap(), &mut nodes)?;
 
     Ok(())
+}
+
+// impl<'i> From<(Position<'i>, Position<'i>)> for LineColLocation {
+//     fn from((start, end): (Position, Position)) -> Self {
+//         LineColLocation::Span(start.line_col(), end.line_col())
+//     }
+// }
+
+fn lcl_from_bounds((start, end): (Position, Position)) -> LineColLocation {
+    LineColLocation::Span(start.line_col(), end.line_col())
 }
 
 fn parse_imports(
@@ -104,26 +142,36 @@ fn parse_imports(
     Ok(imports
         .into_inner()
         .map(|import| {
-            parse_import(import).map(|import| {
+            parse_import(import.clone()).map(|parsed| {
                 // Check that the required node has been loaded
-                if let Some(loaded) = loaded.get(&import.name) {
-                    if import.signature == loaded.borrow().signature() {
-                        return Ok(import);
+                if let Some(loaded) = loaded.get(&parsed.name) {
+                    if parsed.signature == loaded.borrow().signature() {
+                        return Ok(parsed);
                     }
 
-                    return Err(Error::Code(
-                        CodeError::SignatureMismatch(
-                            import.name,
-                            import.signature,
-                            loaded.borrow().signature(),
-                        ),
-                        Section::Imports,
+                    return Err(Error::new(
+                        ErrorKind::Code {
+                            r#type: CodeError::SignatureMismatch(
+                                parsed.name,
+                                parsed.signature,
+                                loaded.borrow().signature(),
+                            ),
+                            section: Section::Imports,
+                        },
+                        lcl_from_bounds(import.as_span().split()),
                     ));
                 }
 
-                Err(Error::Code(
-                    CodeError::Undefined(import.name),
-                    Section::Imports,
+                Err(Error::new(
+                    ErrorKind::Code {
+                        r#type: CodeError::Undefined {
+                            got: parsed.name,
+                            guess: None,
+                            variant: UndefinedError::Undefined,
+                        },
+                        section: Section::Imports,
+                    },
+                    lcl_from_bounds(import.as_span().split()),
                 ))
             })
         })
@@ -140,9 +188,59 @@ fn parse_import(import: Pair<Rule>) -> PResult<Import> {
     })
 }
 
-// fn parse_nodes(nodes: Pair<Rule>) -> PResult<NodeMap> {
-//
-// }
+fn parse_nodes(
+    nodes: Pair<Rule>,
+    loaded: &HashMap<String, Rc<RefCell<Node>>>,
+    imports: &Vec<Import>,
+) -> PResult<NodeMap> {
+    let mut res = NodeMap::new();
+    for node in nodes.into_inner() {
+        let node = parse_node(node, loaded, imports)?;
+        let name = node.name();
+        res.insert(name, Rc::new(RefCell::new(node)));
+    }
+
+    Ok(res)
+}
+
+fn parse_node(
+    node: Pair<Rule>,
+    loaded: &HashMap<String, Rc<RefCell<Node>>>,
+    imports: &Vec<Import>,
+) -> PResult<Node> {
+    let mut inner = node.clone().into_inner();
+
+    let id = inner.next().unwrap().as_str();
+    let node_ref = inner.next().unwrap().as_str();
+
+    if node_ref.chars().next().unwrap() == '$' {
+        imports
+            .iter()
+            .find(|&import| import.name.as_str() == node_ref)
+            .ok_or_else(|| {
+                let stripped = node_ref.chars().skip(1).collect::<String>();
+
+                Error::new(
+                    ErrorKind::Code {
+                        r#type: CodeError::Undefined {
+                            got: node_ref.to_owned(),
+                            guess: loaded.contains_key(&stripped).then(|| stripped),
+                            variant: UndefinedError::NotImported {
+                                node_name: id.to_owned(),
+                            },
+                        },
+                        section: Section::Nodes,
+                    },
+                    lcl_from_bounds(node.as_span().split()),
+                )
+            })?;
+    }
+
+    // let signature = imports.iter().find(|&&import| import.name;
+
+    // Ok(Node::new(id.as_str(), ))
+    todo!();
+}
 
 fn parse_signature(signature: Pair<Rule>) -> PResult<Signature> {
     let mut inner = signature.into_inner();
@@ -157,10 +255,17 @@ fn parse_input(input: Pair<Rule>) -> PResult<HashMap<String, Type>> {
     let mut res = HashMap::<String, Type>::new();
 
     for var in input.into_inner() {
+        let span = var.as_span();
         let (id, ty) = parse_var(var);
 
         if let Some(_) = res.insert(id.clone(), ty) {
-            return Err(Error::Code(CodeError::Redefinition(id), Section::Signature));
+            return Err(Error::new(
+                ErrorKind::Code {
+                    r#type: CodeError::Redefinition(id),
+                    section: Section::Signature,
+                },
+                lcl_from_bounds(span.split()),
+            ));
         }
     }
 
@@ -171,10 +276,17 @@ fn parse_output(output: Pair<Rule>) -> PResult<HashMap<String, Type>> {
     let mut res = HashMap::<String, Type>::new();
 
     for var in output.into_inner() {
+        let span = var.as_span();
         let (id, ty) = parse_var(var);
 
         if let Some(_) = res.insert(id.clone(), ty) {
-            return Err(Error::Code(CodeError::Redefinition(id), Section::Signature));
+            return Err(Error::new(
+                ErrorKind::Code {
+                    r#type: CodeError::Redefinition(id),
+                    section: Section::Signature,
+                },
+                lcl_from_bounds(span.split()),
+            ));
         }
     }
 
