@@ -41,7 +41,7 @@ field = { (id | meta) ~ ("." ~ id)+ }
 meta = @{ "@" ~ ("IN" | "OUT") }
 
 /// Reference to a node during node declaration
-node_ref = _{ "$"? ~ id }
+node_ref = @{ "$"? ~ id }
 
 
 /// Identifier
