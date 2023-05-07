@@ -1,11 +1,10 @@
 use pest::{error::LineColLocation, iterators::Pairs, Position, Span};
 
 use super::{
-    shader::{Node, SocketValue},
+    shader::Node,
+    sockets::{GraphInput, InSocket, SocketValue},
     GraphSignature, Signature, Type,
 };
-
-use crate::shader::shader::{GraphInput, InSocket};
 
 use std::{
     cell::RefCell,
@@ -196,8 +195,8 @@ fn parse_nodes(
     let mut res = NodeMap::new();
     for node in nodes.into_inner() {
         let node = parse_node(node, loaded, imports)?;
-        let name = node.name();
-        res.insert(name, Rc::new(RefCell::new(node)));
+        let name = node.borrow().name();
+        res.insert(name, node);
     }
 
     Ok(res)
@@ -207,24 +206,28 @@ fn parse_node(
     node: Pair<Rule>,
     loaded: &HashMap<String, Rc<RefCell<Node>>>,
     imports: &Vec<Import>,
-) -> PResult<Node> {
+) -> PResult<Rc<RefCell<Node>>> {
     let mut inner = node.clone().into_inner();
 
     let id = inner.next().unwrap().as_str();
     let node_ref = inner.next().unwrap().as_str();
 
+    let mut stripped = node_ref.to_owned();
+
     if node_ref.chars().next().unwrap() == '$' {
+        stripped = node_ref.chars().skip(1).collect::<String>();
+
         imports
             .iter()
             .find(|&import| import.name.as_str() == node_ref)
             .ok_or_else(|| {
-                let stripped = node_ref.chars().skip(1).collect::<String>();
-
                 Error::new(
                     ErrorKind::Code {
                         r#type: CodeError::Undefined {
                             got: node_ref.to_owned(),
-                            guess: loaded.contains_key(&stripped).then(|| stripped),
+                            guess: loaded
+                                .contains_key(&stripped)
+                                .then(|| format!("{:?}", loaded.get(&stripped).unwrap().borrow())),
                             variant: UndefinedError::NotImported {
                                 node_name: id.to_owned(),
                             },
@@ -235,6 +238,8 @@ fn parse_node(
                 )
             })?;
     }
+
+    if let Some(node) = loaded.get(&stripped) {}
 
     // let signature = imports.iter().find(|&&import| import.name;
 
@@ -345,7 +350,7 @@ mod test {
 
         let mut loaded = HashMap::new();
         for node in vec![
-            Node::new(
+            Node::new_wrapped(
                 "add",
                 vec![
                     ("lhs".to_owned(), SocketValue::from(Type::Vec3)),
@@ -355,7 +360,7 @@ mod test {
                 vec![("value".to_owned(), SocketValue::from(Type::Value))].into_iter(),
                 Box::new(|_input, _output| ()),
             ),
-            Node::new(
+            Node::new_wrapped(
                 "noise",
                 vec![
                     ("x".to_owned(), SocketValue::from(Type::Value)),

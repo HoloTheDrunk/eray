@@ -1,7 +1,9 @@
+pub mod graph;
 pub mod parsing;
 pub mod shader;
+pub mod sockets;
 
-use shader::{GraphInput, InSocket, SocketValue};
+use sockets::{GraphInput, InSocket, SocketValue};
 
 use std::{collections::HashMap, str::FromStr};
 
