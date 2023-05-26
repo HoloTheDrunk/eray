@@ -83,6 +83,16 @@ impl From<Image<f32>> for Image<Color> {
     }
 }
 
+impl<T> Default for Image<T> {
+    fn default() -> Self {
+        Self {
+            width: 0,
+            height: 0,
+            pixels: vec![],
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::process::Stdio;
