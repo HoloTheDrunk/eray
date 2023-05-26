@@ -1,18 +1,11 @@
 use pest::{error::LineColLocation, iterators::Pairs, Position, Span};
 
 use super::{
-    shader::Node,
-    sockets::{GraphInput, InSocket, SocketValue},
-    GraphSignature, Signature, Type,
+    graph::{node, Graph, ImportedNode, Name, Node, NodeId, SocketType, Unvalidated},
+    Signature,
 };
 
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    fmt::{Debug, Display},
-    rc::Rc,
-    str::FromStr,
-};
+use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, str::FromStr};
 
 use {
     pest::{iterators::Pair, Parser},
@@ -67,8 +60,8 @@ pub enum CodeError {
         guess: Option<String>,
         variant: UndefinedError,
     },
-    SignatureMismatch(String, Signature, Signature),
-    Type(String, String),
+    SignatureMismatch(Name, Signature, Signature),
+    SocketType(SocketType, SocketType),
 }
 
 #[derive(Debug, Clone)]
@@ -90,16 +83,18 @@ pub enum Section {
 #[grammar = "lib/pest/grammar.pest"]
 struct SParser;
 
-type NodeMap = HashMap<String, Rc<RefCell<Node>>>;
-
 #[derive(Debug)]
+// TODO: Maybe remove and just load node directly
 struct Import {
-    name: String,
+    name: Name,
     signature: Signature,
 }
 
-/// Constructs a [GraphInput] from the eray code passed as input
-pub fn parse_shader(eray: &str, loaded: &mut HashMap<String, Rc<RefCell<Node>>>) -> PResult<()> {
+/// Constructs a [Graph] from the eray code passed as input
+pub fn parse_shader(
+    eray: &str,
+    loaded: &mut HashMap<Name, ImportedNode<Unvalidated>>,
+) -> PResult<Graph<Unvalidated>> {
     let mut pairs = SParser::parse(Rule::program, eray)
         .map_err(|err| Error::new(ErrorKind::Parsing(err.clone()), err.line_col))?;
 
@@ -107,12 +102,12 @@ pub fn parse_shader(eray: &str, loaded: &mut HashMap<String, Rc<RefCell<Node>>>)
     recursive_print(Some(&program), 0);
     parse_program(program, loaded)?;
 
-    Ok(())
+    todo!("Finish .eray graph parsing")
 }
 
 fn parse_program(
     program: Pair<Rule>,
-    loaded: &mut HashMap<String, Rc<RefCell<Node>>>,
+    loaded: &mut HashMap<Name, ImportedNode<Unvalidated>>,
 ) -> PResult<()> {
     let mut inner = program.into_inner();
 
@@ -124,19 +119,13 @@ fn parse_program(
     Ok(())
 }
 
-// impl<'i> From<(Position<'i>, Position<'i>)> for LineColLocation {
-//     fn from((start, end): (Position, Position)) -> Self {
-//         LineColLocation::Span(start.line_col(), end.line_col())
-//     }
-// }
-
 fn lcl_from_bounds((start, end): (Position, Position)) -> LineColLocation {
     LineColLocation::Span(start.line_col(), end.line_col())
 }
 
 fn parse_imports(
     imports: Pair<Rule>,
-    loaded: &mut HashMap<String, Rc<RefCell<Node>>>,
+    loaded: &mut HashMap<Name, ImportedNode<Unvalidated>>,
 ) -> PResult<Vec<Import>> {
     Ok(imports
         .into_inner()
@@ -144,7 +133,7 @@ fn parse_imports(
             parse_import(import.clone()).map(|parsed| {
                 // Check that the required node has been loaded
                 if let Some(loaded) = loaded.get(&parsed.name) {
-                    if parsed.signature == loaded.borrow().signature() {
+                    if parsed.signature == loaded.signature() {
                         return Ok(parsed);
                     }
 
@@ -153,7 +142,7 @@ fn parse_imports(
                             r#type: CodeError::SignatureMismatch(
                                 parsed.name,
                                 parsed.signature,
-                                loaded.borrow().signature(),
+                                loaded.signature(),
                             ),
                             section: Section::Imports,
                         },
@@ -164,7 +153,7 @@ fn parse_imports(
                 Err(Error::new(
                     ErrorKind::Code {
                         r#type: CodeError::Undefined {
-                            got: parsed.name,
+                            got: String::from(&parsed.name),
                             guess: None,
                             variant: UndefinedError::Undefined,
                         },
@@ -182,52 +171,55 @@ fn parse_import(import: Pair<Rule>) -> PResult<Import> {
     let mut inner = import.into_inner();
 
     Ok(Import {
-        name: inner.next().unwrap().as_str().to_owned(),
+        name: inner.next().unwrap().as_str().into(),
         signature: parse_signature(inner.next().unwrap())?,
     })
 }
 
 fn parse_nodes(
     nodes: Pair<Rule>,
-    loaded: &HashMap<String, Rc<RefCell<Node>>>,
+    loaded: &HashMap<Name, ImportedNode<Unvalidated>>,
     imports: &Vec<Import>,
-) -> PResult<NodeMap> {
-    let mut res = NodeMap::new();
-    for node in nodes.into_inner() {
-        let node = parse_node(node, loaded, imports)?;
-        let name = node.borrow().name();
-        res.insert(name, node);
-    }
-
-    Ok(res)
+) -> PResult<HashMap<NodeId, Node<Unvalidated>>> {
+    // XXX
+    // let mut res = HashMap::new();
+    // for node in nodes.into_inner() {
+    //     let (id, node) = parse_node(node, loaded, imports)?;
+    //     res.insert(id, node);
+    // }
+    //
+    // Ok(res)
+    nodes
+        .into_inner()
+        .map(|node| parse_node(node, loaded, imports))
+        .collect()
 }
 
 fn parse_node(
     node: Pair<Rule>,
-    loaded: &HashMap<String, Rc<RefCell<Node>>>,
+    loaded: &HashMap<Name, ImportedNode<Unvalidated>>,
     imports: &Vec<Import>,
-) -> PResult<Rc<RefCell<Node>>> {
+) -> PResult<(NodeId, Node<Unvalidated>)> {
     let mut inner = node.clone().into_inner();
 
     let id = inner.next().unwrap().as_str();
     let node_ref = inner.next().unwrap().as_str();
 
-    let mut stripped = node_ref.to_owned();
-
     if node_ref.chars().next().unwrap() == '$' {
-        stripped = node_ref.chars().skip(1).collect::<String>();
+        let name: Name = node_ref.chars().skip(1).collect::<String>().as_str().into();
 
+        // Check that that custom node has been imported
         imports
             .iter()
-            .find(|&import| import.name.as_str() == node_ref)
+            .find(|&import| import.name == node_ref.into())
             .ok_or_else(|| {
                 Error::new(
                     ErrorKind::Code {
                         r#type: CodeError::Undefined {
                             got: node_ref.to_owned(),
                             guess: loaded
-                                .contains_key(&stripped)
-                                .then(|| format!("{:?}", loaded.get(&stripped).unwrap().borrow())),
+                                .contains_key(&name)
+                                .then(|| format!("{:?}", loaded.get(&name).unwrap())),
                             variant: UndefinedError::NotImported {
                                 node_name: id.to_owned(),
                             },
@@ -237,14 +229,19 @@ fn parse_node(
                     lcl_from_bounds(node.as_span().split()),
                 )
             })?;
+
+        let imported_node = loaded.get(&name).unwrap().clone();
+
+        Ok((id.into(), Node::Imported(imported_node)))
+    } else {
+        todo!()
     }
 
-    if let Some(node) = loaded.get(&stripped) {}
+    // if let Some(node) = loaded.get(&stripped) {}
 
     // let signature = imports.iter().find(|&&import| import.name;
 
     // Ok(Node::new(id.as_str(), ))
-    todo!();
 }
 
 fn parse_signature(signature: Pair<Rule>) -> PResult<Signature> {
@@ -256,14 +253,14 @@ fn parse_signature(signature: Pair<Rule>) -> PResult<Signature> {
     Ok(Signature { input, output })
 }
 
-fn parse_input(input: Pair<Rule>) -> PResult<HashMap<String, Type>> {
-    let mut res = HashMap::<String, Type>::new();
+fn parse_input(input: Pair<Rule>) -> PResult<HashMap<Name, SocketType>> {
+    let mut res = HashMap::new();
 
     for var in input.into_inner() {
         let span = var.as_span();
         let (id, ty) = parse_var(var);
 
-        if let Some(_) = res.insert(id.clone(), ty) {
+        if let Some(_) = res.insert(id.as_str().into(), ty) {
             return Err(Error::new(
                 ErrorKind::Code {
                     r#type: CodeError::Redefinition(id),
@@ -277,14 +274,14 @@ fn parse_input(input: Pair<Rule>) -> PResult<HashMap<String, Type>> {
     Ok(res)
 }
 
-fn parse_output(output: Pair<Rule>) -> PResult<HashMap<String, Type>> {
-    let mut res = HashMap::<String, Type>::new();
+fn parse_output(output: Pair<Rule>) -> PResult<HashMap<Name, SocketType>> {
+    let mut res = HashMap::new();
 
     for var in output.into_inner() {
         let span = var.as_span();
         let (id, ty) = parse_var(var);
 
-        if let Some(_) = res.insert(id.clone(), ty) {
+        if let Some(_) = res.insert(id.as_str().into(), ty) {
             return Err(Error::new(
                 ErrorKind::Code {
                     r#type: CodeError::Redefinition(id),
@@ -298,12 +295,12 @@ fn parse_output(output: Pair<Rule>) -> PResult<HashMap<String, Type>> {
     Ok(res)
 }
 
-fn parse_var(var: Pair<Rule>) -> (String, Type) {
+fn parse_var(var: Pair<Rule>) -> (String, SocketType) {
     let mut inner = var.into_inner();
 
     (
         inner.next().unwrap().as_str().to_owned(),
-        Type::from_str(inner.next().unwrap().as_str()).unwrap(),
+        SocketType::from_str(inner.next().unwrap().as_str()).unwrap(),
     )
 }
 
@@ -334,6 +331,8 @@ fn recursive_print(cur: Option<&Pair<Rule>>, depth: u8) {
 
 #[cfg(test)]
 mod test {
+    use crate::{shader::graph, ssref};
+
     use super::*;
 
     #[test]
@@ -348,34 +347,47 @@ mod test {
         let code = std::fs::read_to_string("nodes/test.eray")
             .expect("Missing `nodes/test.eray` test shader");
 
-        let mut loaded = HashMap::new();
-        for node in vec![
-            Node::new_wrapped(
+        let mut loaded = vec![
+            ImportedNode::from((
                 "add",
-                vec![
-                    ("lhs".to_owned(), SocketValue::from(Type::Vec3)),
-                    ("rhs".to_owned(), SocketValue::from(Type::Color)),
-                ]
-                .into_iter(),
-                vec![("value".to_owned(), SocketValue::from(Type::Value))].into_iter(),
-                Box::new(|_input, _output| ()),
-            ),
-            Node::new_wrapped(
+                graph! {
+                    inputs:
+                        "lhs": SocketType::Vec3.into(),
+                        "rhs": SocketType::Color.into(),
+                    nodes:
+                        "inner": node! {
+                            inputs:
+                                "lhs": (ssref!(graph "lhs"), SocketType::Vec3.into()),
+                                "rhs": (ssref!(graph "rhs"), SocketType::Color.into()),
+                            outputs:
+                                "value": SocketType::Value.into(),
+                        },
+                    outputs:
+                        "value": (ssref!(node "inner" "value"), SocketType::Value.into())
+                },
+            )),
+            ImportedNode::from((
                 "noise",
-                vec![
-                    ("x".to_owned(), SocketValue::from(Type::Value)),
-                    ("y".to_owned(), SocketValue::from(Type::Value)),
-                ]
-                .into_iter(),
-                vec![("value".to_owned(), SocketValue::from(Type::Value))].into_iter(),
-                Box::new(|_input, _output| ()),
-            ),
+                graph! {
+                    inputs:
+                        "x": SocketType::Value.into(),
+                        "y": SocketType::Value.into(),
+                    nodes:
+                        "inner": node! {
+                            inputs:
+                                "x": (ssref!(graph "x"), SocketType::Value.into()),
+                                "y": (ssref!(graph "y"), SocketType::Value.into()),
+                            outputs:
+                                "value": SocketType::Value.into(),
+                        },
+                    outputs:
+                        "value": (ssref!(node "inner" "value"), SocketType::Value.into())
+                },
+            )),
         ]
         .into_iter()
-        {
-            let name = node.borrow().name();
-            loaded.insert(name, node);
-        }
+        .map(|node| (node.name().clone(), node))
+        .collect();
 
         let res = parse_shader(code.as_str(), &mut loaded);
         assert!(res.is_ok(), "{res:?}");

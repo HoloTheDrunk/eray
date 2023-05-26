@@ -1,165 +1,153 @@
-use super::{sockets::*, Signature, Type};
+use std::collections::HashMap;
 
-use crate::{color::Color, image::Image, vector::Vec3};
+use super::graph::{Name, SocketType, SocketValue};
 
-use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
-
-#[derive(Debug)]
-pub struct Graph<'names> {
-    inputs: HashMap<&'names str, GraphInput>,
-    outputs: HashMap<&'names str, InSocket>,
-
-    root: Rc<RefCell<Node>>,
+#[derive(Debug, PartialEq)]
+pub enum Error {
+    Missing(Side, Name),
+    MismatchedTypes((Name, SocketType), (Name, SocketType)),
+    InvalidType {
+        name: Name,
+        got: SocketType,
+        expected: SocketType,
+    },
+    Unknown,
 }
 
-impl Graph<'_> {
-    pub fn build(&mut self) {
-        self.root.borrow_mut().build();
-    }
-
-    pub fn parse(code: &str) {
-        todo!()
-    }
+#[derive(Debug, PartialEq)]
+pub enum Side {
+    Input,
+    Output,
 }
 
-pub struct Node {
-    name: String,
-
-    inputs: Vec<InSocket>,
-    outputs: Vec<Box<dyn OutSocket>>,
-
-    shader: Box<dyn Fn(&HashMap<&str, &SocketValue>, &mut HashMap<String, &mut SocketValue>)>,
+pub struct Shader {
+    func: Box<dyn CloneFn>,
 }
 
-impl Debug for Node {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Node")
-            .field("inputs", &self.inputs)
-            .field("outputs", &self.outputs)
-            .finish_non_exhaustive()
-    }
-}
-
-impl Node {
-    pub fn new_wrapped(
-        name: &str,
-        inputs: impl Iterator<Item = (String, SocketValue)>,
-        outputs: impl Iterator<Item = (String, SocketValue)>,
-        shader: Box<dyn Fn(&HashMap<&str, &SocketValue>, &mut HashMap<String, &mut SocketValue>)>,
-    ) -> Rc<RefCell<Self>> {
-        let res = Rc::new(RefCell::new(Self {
-            name: name.to_owned(),
-            inputs: inputs
-                .map(|(name, value)| InSocket {
-                    prev: None,
-                    name,
-                    value,
-                })
-                .collect(),
-            outputs: vec![],
-            shader,
-        }));
-
-        res.borrow_mut()
-            .outputs
-            .extend(outputs.map(|(name, value)| -> Box<dyn OutSocket> {
-                Box::new(NodeOutSocket {
-                    node: res.clone(),
-                    name,
-                    value,
-                })
-            }));
-
-        res
-    }
-
-    // pub fn duplicate(&self) -> Rc<RefCell<Self>> {
-    //     let shader = &self.to_owned().shader;
-    //     let res = Rc::new(RefCell::new(Self {
-    //         outputs: vec![],
-    //         shader: shader.clone(),
-    //         ..*self.clone()
-    //     }));
-    //
-    //     // res.borrow_mut().outputs.extend(outputs.map)
-    //     todo!()
-    // }
-    //
-    fn add_outputs(
-        wrapped: &mut Rc<RefCell<Node>>,
-        outputs: impl Iterator<Item = Box<dyn OutSocket>>,
-    ) {
-    }
-
-    pub fn name(&self) -> String {
-        self.name.clone()
-    }
-
-    pub fn signature(&self) -> Signature {
-        Signature {
-            input: self
-                .inputs
-                .iter()
-                .map(|in_socket| (in_socket.name.clone(), in_socket.value.r#type()))
-                .collect(),
-            output: self
-                .outputs
-                .iter()
-                .map(|out_socket| (out_socket.name().to_owned(), out_socket.value().r#type()))
-                .collect(),
+impl Shader {
+    /// Creates a [Shader] from a shader function.
+    /// # Example
+    /// ```
+    /// Shader::new(|inputs, outputs| {
+    ///     get_sv!(input  | inputs  . "value" : Number > in_value);
+    ///     get_sv!(output | outputs . "value" : Number > out_value);
+    ///
+    ///     *out_value.get_or_insert(0.) = 1. - in_value.unwrap_or(0.);
+    ///
+    ///     Ok(())
+    /// })
+    /// ```
+    pub fn new(
+        func: fn(&HashMap<Name, SocketValue>, &mut HashMap<Name, SocketValue>) -> Result<(), Error>,
+    ) -> Self {
+        Self {
+            func: Box::new(func),
         }
     }
 
-    pub fn build(&mut self) {
-        self.inputs
-            .iter_mut()
-            .filter(|socket| socket.value.is_none())
-            .for_each(|socket| {
-                if let Some(mut out_socket) =
-                    socket.prev.as_ref().map(|refcell| refcell.borrow_mut())
-                {
-                    out_socket.compute_value();
-                } else {
-                    socket.value.set_default();
-                }
-            });
-
-        (self.shader)(
-            &self
-                .inputs
-                .iter()
-                .map(|v| (v.name.as_str(), &v.value))
-                .collect(),
-            &mut self
-                .outputs
-                .iter_mut()
-                .map(|v| (v.name().to_string(), v.value_mut()))
-                .collect(),
-        );
+    pub fn call(
+        &self,
+        inputs: &HashMap<Name, SocketValue>,
+        outputs: &mut HashMap<Name, SocketValue>,
+    ) -> Result<(), Error> {
+        (self.func)(inputs, outputs)
     }
 }
+
+impl Default for Shader {
+    fn default() -> Self {
+        Self::new(|_inputs, _outputs| Ok(()))
+    }
+}
+
+impl Clone for Shader {
+    fn clone(&self) -> Self {
+        Self {
+            func: self.func.clone_box(),
+        }
+    }
+}
+
+pub trait CloneFn:
+    Fn(&HashMap<Name, SocketValue>, &mut HashMap<Name, SocketValue>) -> Result<(), Error>
+{
+    fn clone_box(&self) -> Box<dyn CloneFn>;
+}
+
+impl<F: Clone + 'static> CloneFn for F
+where
+    F: Fn(&HashMap<Name, SocketValue>, &mut HashMap<Name, SocketValue>) -> Result<(), Error>,
+{
+    fn clone_box(&self) -> Box<dyn CloneFn> {
+        Box::new(self.clone())
+    }
+}
+
+#[macro_export]
+/// [get](std::collections::HashMap::get)s the desired input/output field with error reporting
+macro_rules! get_sv {
+    (input | $hashmap:ident . $field:literal : $type:ident > $name:ident) => {
+        let $name = $hashmap.get(&$field.into()).ok_or_else(|| {
+            crate::shader::shader::Error::Missing(crate::shader::shader::Side::Input, $field.into())
+        })?;
+
+        #[rustfmt::skip]
+        let crate::shader::graph::SocketValue::$type($name) = $name
+            else {
+                return Err(crate::shader::shader::Error::InvalidType {
+                    name: $field.into(),
+                    got: crate::shader::graph::SocketType::from($name),
+                    expected: crate::shader::graph::SocketType::$type,
+                });
+            };
+    };
+
+    (output | $hashmap:ident . $field:literal : $type:ident > $name:ident) => {
+        let $name = $hashmap.get_mut(&$field.into()).ok_or_else(|| {
+            crate::shader::shader::Error::Missing(
+                crate::shader::shader::Side::Output,
+                $field.into(),
+            )
+        })?;
+
+        #[rustfmt::skip]
+        let crate::shader::graph::SocketValue::$type(ref mut $name) = $name
+            else {
+                return Err(crate::shader::shader::Error::InvalidType {
+                    name: $field.into(),
+                    got: crate::shader::graph::SocketType::from($name),
+                    expected: crate::shader::graph::SocketType::$type,
+                });
+            };
+    };
+}
+
+pub use get_sv;
 
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
-    fn test_valid_shader_compilation() {
-        let shader = Graph {
-            inputs: Default::default(),
-            outputs: Default::default(),
-            root: Node::new_wrapped(
-                "Test Shader",
-                std::iter::empty(),
-                std::iter::once(("Fac".to_owned(), SocketValue::Value(None))),
-                Box::new(|_inputs, outputs| outputs.get_mut("Fac").unwrap().set_f32(50, 50, 1.)),
-            ),
-        };
+    fn shader_function_type() {
+        let mut inputs = HashMap::new();
+        inputs.insert("value".into(), SocketType::Number.into());
 
-        let prev = shader.root.borrow().outputs[0].value().clone();
+        Shader::new(|inputs, outputs| {
+            get_sv!( input | inputs  . "value" : Number > in_value);
+            get_sv!(output | outputs . "value" : Number > out_value);
 
-        shader.root.borrow_mut().build();
+            let initial = out_value.clone();
 
-        assert_ne!(prev, *shader.root.borrow().outputs[0].value());
+            *out_value.get_or_insert(0.) += in_value.unwrap_or(0.);
+
+            let modified = out_value.clone();
+
+            assert_ne!(initial, modified);
+
+            Ok(())
+        })
+        .call(&inputs, &mut inputs.clone())
+        .unwrap();
     }
 }
