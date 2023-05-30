@@ -1,3 +1,5 @@
+//! Flat (non-recursive) [Graph] data structure implementation.
+
 use std::{
     collections::{HashMap, VecDeque},
     convert::AsRef,
@@ -11,10 +13,12 @@ use super::{shader::Shader, Signature};
 use crate::{color::Color, image::Image, vector::Vec3};
 
 macro_rules! socket_value {
-    { $($name:ident : $type:ty = $default:expr),+ $(,)? } => {
+    { $($(#[$attr:meta])* $name:ident : $type:ty = $default:expr),+ $(,)? } => {
         #[derive(Clone, Debug, PartialEq)]
+        /// Possible socket value types.
         pub enum SocketValue {
             $(
+                $(#[$attr])*
                 $name(Option<$type>)
             ),+
         }
@@ -36,6 +40,7 @@ macro_rules! socket_value {
         }
 
         impl SocketValue {
+            /// Check if the socket has a value
             pub fn is_none(&self) -> bool {
                 match self {
                     $(
@@ -44,6 +49,7 @@ macro_rules! socket_value {
                 }
             }
 
+            /// Set the contained value to its type's defined default.
             pub fn set_default(&mut self) {
                 match self {
                     $(
@@ -52,6 +58,7 @@ macro_rules! socket_value {
                 }
             }
 
+            /// Get the contained value, defaulting it beforehand if it is None.
             pub fn or_default(&mut self) -> &SocketValue {
                 if self.is_none() {
                     self.set_default();
@@ -62,9 +69,13 @@ macro_rules! socket_value {
         }
 
         #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+        /// Possible socket types.
         pub enum SocketType {
             #[default]
-            $($name),+
+            $(
+                $(#[$attr])*
+                $name
+            ),+
         }
 
         impl<T: AsRef<SocketValue>> From<T> for SocketType {
@@ -93,15 +104,21 @@ macro_rules! socket_value {
 }
 
 socket_value! {
+    /// Single value
     Number: f32 = 0.,
+    /// Character [String]
     String: String = String::from(""),
 
+    /// Image of floating-point values
     Value: Image<f32> = Image::default(),
+    /// Image of [3D vectors](Vec3)
     Vec3: Image<Vec3> = Image::default(),
+    /// Image of [colors](Color)
     Color: Image<Color> = Image::default(),
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+/// Wrapper around [String].
 pub struct NodeId(String);
 impl From<&str> for NodeId {
     fn from(value: &str) -> Self {
@@ -110,6 +127,7 @@ impl From<&str> for NodeId {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+/// Wrapper around [String].
 pub struct Name(String);
 impl From<&str> for Name {
     fn from(value: &str) -> Self {
@@ -123,8 +141,11 @@ impl From<&Name> for String {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+/// Reference to a [Graph] or [Node] socket.
 pub enum SocketRef {
+    /// Node [NodeId] and output socket [Name]
     Node(NodeId, Name),
+    /// Graph input socket [Name]
     Graph(Name),
 }
 
@@ -165,18 +186,27 @@ macro_rules! ssref {
 }
 
 macro_rules! states {
-    ($($state:tt),+ $(,)?) => {
+    ($($(#[$attr:meta])* $state:ident),+ $(,)?) => {
         $(
             #[derive(Clone, Debug, Default, PartialEq)]
+            $(#[$attr])*
             pub struct $state;
         )+
     };
 }
-states!(Unvalidated, Validated);
+states! {
+    /// Minimal checks have been done to make sure the graph is usable.
+    Unvalidated,
+    /// Checked for cycles, socket connection types, etc...
+    Validated,
+}
 
 #[derive(Debug, PartialEq)]
+/// [Graph] error
 pub enum Error {
+    /// Detected a cycle on the node with the given [NodeId].
     Cycle(NodeId),
+    /// [Shader] returned with an error.
     Shader(super::shader::Error),
 }
 
@@ -187,16 +217,47 @@ impl From<super::shader::Error> for Error {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
+/// Flat graph data structure state machine implementation.
 pub struct Graph<State> {
+    /// Graph inputs consisting of a [Name] and a value set before calling the [Graph].
     pub inputs: HashMap<Name, SocketValue>,
+    /// Graph outputs consisting of a [Name], a reference to a [Graph] input or [Node] output
+    /// socket, along with an output value.
     pub outputs: HashMap<Name, (Option<SocketRef>, SocketValue)>,
 
+    /// Mapping of [NodeIds](NodeId) to [Nodes](Node).
     pub nodes: HashMap<NodeId, Node<State>>,
 
+    /// Current state
     pub state: PhantomData<State>,
 }
 
 #[macro_export]
+/// Instantiate a [Graph] concisely.
+/// # Example
+/// ```
+/// graph! {
+///     inputs:
+///         "iFac": SocketValue::Number(Some(2.)),
+///         "iName": SocketValue::String(None),
+///     nodes:
+///         "identity": node! {
+///             inputs:
+///                 "value": (ssref!(graph "iFac"), SocketType::Number),
+///             outputs:
+///                 "value": SocketType::Number.into();
+///             |_inputs, _outputs| Ok(())
+///         },
+///         "invert": node! {
+///             inputs:
+///                 "value": (ssref!(node "identity" "value"), SocketType::Number),
+///             outputs:
+///                 "value": SocketType::Number.into();
+///         },
+///     outputs:
+///         "oFac": (ssref!(node "invert" "value"), SocketValue::Number(None)),
+/// };
+/// ```
 macro_rules! graph {
     { $($field:ident $(: $($name:literal : $value:expr),+)? $(,)?),+ } => {
         Graph {
@@ -207,6 +268,7 @@ macro_rules! graph {
 }
 
 impl Graph<Unvalidated> {
+    /// Check the [unvalidated](Unvalidated) [Graph] for cycles.
     pub fn validate(self) -> Result<Graph<Validated>, Error> {
         for output in self.outputs.iter() {
             let mut path = Vec::<&NodeId>::new();
@@ -378,10 +440,14 @@ impl Graph<Validated> {
 }
 
 #[derive(Clone, Default)]
+/// A "raw" node with its own [Shader].
 pub struct GraphNode {
+    /// Node inputs.
     pub inputs: HashMap<Name, (Option<SocketRef>, SocketType)>,
+    /// Node outputs.
     pub outputs: HashMap<Name, SocketValue>,
 
+    /// Function to be run, taking the inputs and modifying the output values.
     pub shader: Shader,
 }
 
@@ -402,17 +468,21 @@ impl PartialEq for GraphNode {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
+/// Imported node, i.e. a sub-graph based on a loaded [Graph].
 pub struct ImportedNode<State> {
     name: Name,
+    /// Iputs to be passed to the inner [Graph].
     pub inputs: HashMap<Name, (Option<SocketRef>, SocketType)>,
     inner: Graph<State>,
 }
 
 impl<State> ImportedNode<State> {
+    /// Get the [Name] of the loaded [Graph] used to create this [ImportedNode].
     pub fn name(&self) -> &Name {
         &self.name
     }
 
+    /// Get the sub-graph's type signature.
     pub fn signature(&self) -> Signature {
         Signature {
             input: self
@@ -462,8 +532,11 @@ impl ImportedNode<Unvalidated> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+/// A simple graph node or an imported sub-graph node.
 pub enum Node<State> {
+    /// Single graph node.
     Graph(GraphNode),
+    /// Imported sub-graph.
     Imported(ImportedNode<State>),
 }
 
@@ -502,6 +575,7 @@ impl<State> Node<State> {
         }
     }
 
+    /// Get the node's (and by extension the shader's) type signature.
     pub fn signature(&self) -> Signature {
         let input = self
             .inputs()

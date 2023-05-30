@@ -1,3 +1,6 @@
+//! [Object] and [OpenGLObject] definitions along with auxilliary / helper functions and data
+//! structures
+
 use std::{
     mem::{size_of, size_of_val},
     ops::Range,
@@ -8,32 +11,44 @@ use std::{
 use crate::{
     primitives::{Triangle, Vertex},
     raycasting::{Ray, RaycastHit},
-    Building, Built,
+    vector::Vec3,
+    Building, Built, GLConsumed,
 };
 
-use super::vector::Vec3;
-
 #[derive(Debug)]
+/// OpenGL-ready helper struct
 pub struct OpenGLObject {
+    /// OpenGL index of this object's vertices VBO
     pub vertices_vbo: u32,
-    pub normals_vbo: u32,
+    /// OpenGL index of this object's normals VBO
+    pub normals_vbo: Option<u32>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
+/// Full object with metadata and optimization info
 pub struct Object<State> {
+    /// Current state ([Building]/[Built])
     pub state: std::marker::PhantomData<State>,
 
+    /// Name tag
     pub name: Option<String>,
 
+    /// Vertex positions
     pub vertices: Vec<Vec3>,
+    /// Normal directions
     pub normals: Vec<Vec3>,
 
+    /// All faces are 3-gons (i.e. [Triangle] instances)
     pub faces: Vec<Triangle>,
 
+    /// Min and max coordinates of the object in x, y and z
     pub bounding_box: BoundingBox,
 }
 
 impl Object<Built> {
+    /// Check if a ray intersects the object and return intersection information.
+    ///
+    /// Uses the contained [BoundingBox] to ignore objects.
     fn intersects(&self, ray: &Ray) -> Option<RaycastHit> {
         if !self.bounding_box.intersects(ray) {
             return None;
@@ -53,18 +68,24 @@ impl Object<Built> {
             }
         }
 
-        todo!()
+        None
+    }
+}
+
+impl Default for Object<Building> {
+    fn default() -> Self {
+        Self {
+            state: std::marker::PhantomData::<Building>,
+            name: Some(String::default()),
+            vertices: vec![],
+            normals: vec![],
+            faces: vec![],
+            bounding_box: BoundingBox::default(),
+        }
     }
 }
 
 impl Object<Building> {
-    pub fn new() -> Self {
-        Self {
-            state: std::marker::PhantomData::<Building>,
-            ..Default::default()
-        }
-    }
-
     fn push_vertex(&mut self, line: usize, tokens: SplitWhitespace) {
         let coords = parse_coords(tokens, Some(line));
         self.vertices.push(coords[0..2].into());
@@ -186,68 +207,97 @@ impl Object<Built> {
         Ok(object.build().unwrap())
     }
 
-    pub fn to_opengl(&self) {
-        for (index, array, len) in [&self.vertices, &self.normals]
+    /// Convert into an [OpenGLObject] and mark as consumed.
+    pub fn to_opengl(self) -> (Object<GLConsumed>, OpenGLObject) {
+        let vbos = [&self.vertices, &self.normals]
             .into_iter()
             .enumerate()
             .map(|(index, array)| (index as u32, array, array[0].len() as i32))
-        {
-            unsafe {
-                gl::VertexAttribPointer(
-                    // Index
-                    index,
-                    // Component count
-                    len,
-                    // Component type
-                    gl::FLOAT,
-                    // Normalized?
-                    gl::FALSE,
-                    // Stride (could also be 0 here)
-                    size_of::<Vec3>().try_into().unwrap(),
-                    // Pointer in VBO
-                    0 as *const _,
-                );
-
-                gl::EnableVertexAttribArray(index);
-
-                // Generate a Vertex Buffer Object
-                let mut vbo = 0;
-                {
-                    gl::GenBuffers(1, &mut vbo);
-                    assert_ne!(vbo, 0);
-
-                    // Bind it
-                    gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
-
-                    // Pass data to it
-                    gl::BufferData(
-                        gl::ARRAY_BUFFER,
-                        (array.len() * size_of_val(&array[0])) as isize,
-                        array.as_ptr().cast(),
-                        gl::STATIC_DRAW,
-                    );
+            .map(|(index, array, len)| {
+                if len == 0 {
+                    return None;
                 }
-            }
-        }
+
+                unsafe {
+                    gl::VertexAttribPointer(
+                        // Index
+                        index,
+                        // Component count
+                        len,
+                        // Component type
+                        gl::FLOAT,
+                        // Normalized?
+                        gl::FALSE,
+                        // Stride (could also be 0 here)
+                        size_of::<Vec3>().try_into().unwrap(),
+                        // Pointer in VBO
+                        0 as *const _,
+                    );
+
+                    gl::EnableVertexAttribArray(index);
+
+                    // Generate a Vertex Buffer Object
+                    let mut vbo = 0;
+                    {
+                        gl::GenBuffers(1, &mut vbo);
+                        assert_ne!(vbo, 0);
+
+                        // Bind it
+                        gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+
+                        // Pass data to it
+                        gl::BufferData(
+                            gl::ARRAY_BUFFER,
+                            (array.len() * size_of_val(&array[0])) as isize,
+                            array.as_ptr().cast(),
+                            gl::STATIC_DRAW,
+                        );
+                    }
+
+                    Some(vbo)
+                }
+            })
+            .collect::<Vec<_>>();
+
+        (
+            Object::<GLConsumed> {
+                state: std::marker::PhantomData,
+                name: self.name,
+                vertices: self.vertices,
+                normals: self.normals,
+                faces: self.faces,
+                bounding_box: self.bounding_box,
+            },
+            OpenGLObject {
+                vertices_vbo: vbos[0].unwrap(),
+                normals_vbo: vbos[1],
+            },
+        )
     }
 }
 
 #[derive(Debug, Default)]
+/// Spatial limits of the object's vertices relative to its origin.
 pub struct BoundingBox {
+    /// X-axis limits (left -> right)
     pub x: Range<f32>,
+    /// Y-axis limits (down -> up)
     pub y: Range<f32>,
+    /// Z-axis limits (backwards -> forwards)
     pub z: Range<f32>,
 }
 
 impl BoundingBox {
-    fn bounds(&self) -> [Vec3; 2] {
+    /// Get the start and end opposite corners of the [BoundingBox].
+    pub fn bounds(&self) -> [Vec3; 2] {
         [
             Vec3::new(self.x.start, self.y.start, self.z.start),
             Vec3::new(self.x.end, self.y.end, self.z.end),
         ]
     }
 
-    fn intersects(&self, ray: &Ray) -> bool {
+    /// Checks if the [Ray] intersects with the [BoundingBox].
+    pub fn intersects(&self, ray: &Ray) -> bool {
         let start = ray.start();
 
         let invdir = 1. / *ray.dir();

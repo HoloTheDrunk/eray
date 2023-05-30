@@ -1,25 +1,40 @@
+//! Shader implementation, a [Shader] being a wrapper containing functions of a specific type
+//! signature with convenience functions.
+
 use std::collections::HashMap;
 
 use super::graph::{Name, SocketType, SocketValue};
 
 #[derive(Debug, PartialEq)]
+/// Possible errors returned during a [Shader]'s lifecycle.
 pub enum Error {
+    /// Missing socket.
     Missing(Side, Name),
+    /// Wrong type for socket.
     MismatchedTypes((Name, SocketType), (Name, SocketType)),
+    /// Tried to unwrap a socket with the wrong expected [SocketType].
     InvalidType {
+        /// [Name] of the socket.
         name: Name,
+        /// Requested [SocketType].
         got: SocketType,
+        /// Actual [SocketType] of the socket.
         expected: SocketType,
     },
-    Unknown,
+    /// Unknown or untyped error
+    Unknown(Option<String>),
 }
 
 #[derive(Debug, PartialEq)]
+/// Socket side.
 pub enum Side {
+    #[allow(missing_docs)]
     Input,
+    #[allow(missing_docs)]
     Output,
 }
 
+/// Shader container
 pub struct Shader {
     func: Box<dyn CloneFn>,
 }
@@ -32,7 +47,7 @@ impl Shader {
     ///     get_sv!(input  | inputs  . "value" : Number > in_value);
     ///     get_sv!(output | outputs . "value" : Number > out_value);
     ///
-    ///     *out_value.get_or_insert(0.) = 1. - in_value.unwrap_or(0.);
+    ///     *out_value.get_or_insert(0.) = -in_value.unwrap_or(0.);
     ///
     ///     Ok(())
     /// })
@@ -45,6 +60,7 @@ impl Shader {
         }
     }
 
+    /// Execute the contained function.
     pub fn call(
         &self,
         inputs: &HashMap<Name, SocketValue>,
@@ -68,9 +84,11 @@ impl Clone for Shader {
     }
 }
 
+/// Intermediary trait to allow boxing function inside a struct.
 pub trait CloneFn:
     Fn(&HashMap<Name, SocketValue>, &mut HashMap<Name, SocketValue>) -> Result<(), Error>
 {
+    /// Clone the boxed function.
     fn clone_box(&self) -> Box<dyn CloneFn>;
 }
 

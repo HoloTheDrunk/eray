@@ -1,3 +1,5 @@
+//! Basic image implementation with saving
+
 use std::{
     fs::OpenOptions,
     io::{BufWriter, Write},
@@ -9,13 +11,19 @@ use crate::vector::Vec3;
 use super::color::Color;
 
 #[derive(Clone, Debug, PartialEq)]
+/// Generic image struct. Usage of the word `pixel` in this documentation refers to an instance of
+/// the stored data type.
 pub struct Image<T> {
+    /// Width of the image in pixels
     pub width: u32,
+    /// Height of the image in pixels
     pub height: u32,
+    /// Vector containing the image's pixels
     pub pixels: Vec<T>,
 }
 
 impl<T: Clone> Image<T> {
+    /// Create an image from a pixel width and height and a default value
     pub fn init(width: u32, height: u32, value: T) -> Self {
         Self {
             width,
@@ -24,16 +32,19 @@ impl<T: Clone> Image<T> {
         }
     }
 
+    /// Get a pixel at x/y coordinates, with width/height modulos applied to the respective coordinates for easy tiling.
     pub fn mod_get(&self, x: u32, y: u32) -> T {
         self.pixels[((y * self.width) % self.height + x % self.width) as usize].clone()
     }
 
+    /// Set a pixel at x/y coordinates
     pub fn set(&mut self, x: u32, y: u32, value: T) {
         self.pixels[(y * self.width + x) as usize] = value;
     }
 }
 
 impl Image<Color> {
+    /// Save current state as a .ppm according to the path given as argument
     pub fn save_as_ppm(&self, path: &Path) {
         let mut file = OpenOptions::new()
             .create(true)

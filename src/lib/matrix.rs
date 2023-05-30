@@ -1,18 +1,24 @@
+//! Basic 4x4 matrix implementation
+
 use std::ops::Mul;
 
 use crate::vector::Vec3;
 
 #[derive(Debug, Default)]
+/// 4x4 matrix
 pub struct Mat4 {
+    /// Arrays storing the matrix data
     pub inner: [[f32; 4]; 4],
 }
 
 #[derive(Debug, Default)]
+/// 3D transformation representation
 pub struct Transform {
     inner: Mat4,
 
     translation: Vec3,
     scale: Vec3,
+    rotation: Vec3,
 }
 
 impl Mul<Mat4> for Mat4 {
@@ -76,19 +82,23 @@ impl Transform {
         res
     }
 
+    /// Add a translation of `delta` to the [Transform]
     pub fn translate(mut self, delta: Vec3) -> Self {
         self.translation += delta;
         self.inner = self.inner * Transform::new_translation(delta);
         self
     }
 
+    /// Scale by `delta`
     pub fn scale(mut self, delta: Vec3) -> Self {
         self.scale += delta;
         self.inner = self.inner * Transform::new_scaling(delta);
         self
     }
 
+    /// Rotate by `angle` around `axis`
     pub fn rotate(mut self, axis: Vec3, angle: f32) -> Self {
+        self.rotation += axis * angle;
         self.inner = self.inner * Transform::new_rotation(axis.normalize(), angle);
         self
     }

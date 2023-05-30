@@ -1,10 +1,16 @@
+//! 3D vector definition
+
 use ::derive_more::{Add, AddAssign, Neg, Sub, SubAssign};
 use std::ops::{Div, Mul, MulAssign};
 
 #[derive(Add, AddAssign, Sub, SubAssign, Neg, PartialEq, Clone, Copy, Debug, Default)]
+/// A 3D vector
 pub struct Vec3 {
+    #[allow(missing_docs)]
     pub x: f32,
+    #[allow(missing_docs)]
     pub y: f32,
+    #[allow(missing_docs)]
     pub z: f32,
 }
 
@@ -43,25 +49,30 @@ macro_rules! into_primitive_array {
 into_primitive_array!(i32, i64, f32, f64);
 
 impl Vec3 {
+    /// Create a new vector from coordinates.
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Vec3 { x, y, z }
     }
 
     #[inline]
+    /// Get squared length of the vector, slightly faster than [Vec3::len].
     pub fn len_sq(&self) -> f32 {
         self.dot_product(self)
     }
 
     #[inline]
+    /// Get length of the vector.
     pub fn len(&self) -> f32 {
         self.len_sq().sqrt()
     }
 
     #[inline]
+    /// Get normalized vector pointing in the same direction.
     pub fn normalize(&self) -> Vec3 {
         *self / self.len()
     }
 
+    /// Perform dot product with `other`.
     pub fn dot_product(&self, other: &Vec3) -> f32 {
         macro_rules! dot_product {
             ($l:ident, $r:ident | $($field:ident),*) => {
@@ -73,6 +84,7 @@ impl Vec3 {
         // self.x * other.x + self.y * other.y + self.z * other.z
     }
 
+    /// Perform cross product with `other`.
     pub fn cross_product(&self, other: &Vec3) -> Vec3 {
         Vec3 {
             x: other.z * self.y - self.z * other.y,
@@ -81,6 +93,7 @@ impl Vec3 {
         }
     }
 
+    /// Get angle to `other` vector.
     pub fn angle_to(&self, other: &Vec3) -> f32 {
         let dot = self.dot_product(other);
         let res = dot / (self.len() * other.len());

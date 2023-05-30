@@ -1,3 +1,5 @@
+//! Basic RGB color struct implementation
+
 use std::{
     iter::Sum,
     ops::{Div, Mul},
@@ -8,17 +10,23 @@ use ::derive_more::{Add, AddAssign};
 use crate::vector::Vec3;
 
 #[derive(Clone, Copy, Default, Debug, Add, AddAssign, PartialEq)]
+/// RGB color data type
 pub struct Color {
+    /// Red value
     pub r: f32,
+    /// Green value
     pub g: f32,
+    /// Blue value
     pub b: f32,
 }
 
 impl Color {
+    /// Creates a new RGB [Color] from RGB values
     pub fn new(r: f32, g: f32, b: f32) -> Self {
         Color { r, g, b }
     }
 
+    /// Converts a [Color] to an array of 8-bit integers for GPU usage
     pub fn as_bytes(&self) -> [u8; 3] {
         [
             (self.r * 255.) as u8,
@@ -27,6 +35,7 @@ impl Color {
         ]
     }
 
+    /// Clamps all values to the [0, 1] range
     pub fn clamp(&self) -> Self {
         Self {
             r: self.r.clamp(0., 1.),

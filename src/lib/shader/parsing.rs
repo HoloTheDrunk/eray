@@ -1,11 +1,13 @@
-use pest::{error::LineColLocation, iterators::Pairs, Position, Span};
+//! .eray input parsing.
+
+use pest::{error::LineColLocation, Position};
 
 use super::{
-    graph::{node, Graph, ImportedNode, Name, Node, NodeId, SocketType, Unvalidated},
+    graph::{Graph, ImportedNode, Name, Node, NodeId, SocketType, Unvalidated},
     Signature,
 };
 
-use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, str::FromStr};
+use std::{collections::HashMap, fmt::Debug, str::FromStr};
 
 use {
     pest::{iterators::Pair, Parser},
@@ -32,9 +34,11 @@ use {
 //     };
 // }
 
+/// Parsing result.
 pub type PResult<T> = Result<T, self::Error>;
 
 #[derive(Debug, Clone)]
+/// Parsing error.
 pub struct Error {
     kind: ErrorKind,
     line: LineColLocation,
@@ -47,35 +51,63 @@ impl Error {
 }
 
 #[derive(Debug, Clone)]
+/// Type of parsing [Error]
 pub enum ErrorKind {
+    /// Error during Pest parsing, input is grammatically wrong.
     Parsing(pest::error::Error<Rule>),
-    Code { r#type: CodeError, section: Section },
+    /// Logic error with the input's code.
+    Code {
+        /// Type of error.
+        r#type: CodeError,
+        /// File section where the error happened.
+        section: Section,
+    },
 }
 
 #[derive(Debug, Clone)]
+/// Logic error within the input graph code.
 pub enum CodeError {
+    /// Redefined item (import / node).
     Redefinition(String),
+    /// Use of an undeclared identifier.
     Undefined {
+        /// Parsed name.
         got: String,
+        /// Lexically closest identifier in the related memory.
         guess: Option<String>,
+        /// Subtype providing additional precisions on the error.
         variant: UndefinedError,
     },
+    /// Mismatch between two [Signatures](Signature) when importing a [Node].
     SignatureMismatch(Name, Signature, Signature),
+    /// Mismatch between two sockets' types.
     SocketType(SocketType, SocketType),
 }
 
 #[derive(Debug, Clone)]
+/// Detail regarding an undefined identifier.
 pub enum UndefinedError {
+    /// Identifier is simply undefined.
     Undefined,
-    NotImported { node_name: String },
+    /// Name is undefined but is available in the loaded nodes.
+    NotImported {
+        #[allow(missing_docs)]
+        node: Name,
+    },
 }
 
 #[derive(Debug, Clone)]
+/// The .eray input section where something happened.
 pub enum Section {
+    /// Section is unclear or could be multiple.
     Unknown,
+    /// Graph type [Signature].
     Signature,
+    /// Loaded [Node] importing.
     Imports,
+    /// [Node] declarations.
     Nodes,
+    /// [Node]-[Node] and [Graph]-[Node] link declarations.
     Links,
 }
 
@@ -100,15 +132,13 @@ pub fn parse_shader(
 
     let program = pairs.next().unwrap();
     recursive_print(Some(&program), 0);
-    parse_program(program, loaded)?;
-
-    todo!("Finish .eray graph parsing")
+    parse_program(program, loaded)
 }
 
 fn parse_program(
     program: Pair<Rule>,
     loaded: &mut HashMap<Name, ImportedNode<Unvalidated>>,
-) -> PResult<()> {
+) -> PResult<Graph<Unvalidated>> {
     let mut inner = program.into_inner();
 
     let signature = parse_signature(inner.next().unwrap())?;
@@ -116,7 +146,7 @@ fn parse_program(
     let mut nodes = parse_nodes(inner.next().unwrap(), loaded, &imports)?;
     // parse_links(inner.next().unwrap(), &mut nodes)?;
 
-    Ok(())
+    todo!("Finish .eray graph parsing")
 }
 
 fn lcl_from_bounds((start, end): (Position, Position)) -> LineColLocation {
@@ -220,9 +250,7 @@ fn parse_node(
                             guess: loaded
                                 .contains_key(&name)
                                 .then(|| format!("{:?}", loaded.get(&name).unwrap())),
-                            variant: UndefinedError::NotImported {
-                                node_name: id.to_owned(),
-                            },
+                            variant: UndefinedError::NotImported { node: id.into() },
                         },
                         section: Section::Nodes,
                     },
@@ -331,7 +359,7 @@ fn recursive_print(cur: Option<&Pair<Rule>>, depth: u8) {
 
 #[cfg(test)]
 mod test {
-    use crate::{shader::graph, ssref};
+    use crate::{node, shader::graph, ssref};
 
     use super::*;
 
