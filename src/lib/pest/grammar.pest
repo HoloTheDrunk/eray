@@ -1,66 +1,73 @@
-//! Parser for eray shader graph files
+//! Parser for eray shader graph files.
+/// Full graph.
 program = { SOI ~ signature ~ imports ~ nodes ~ links ~ EOI }
 
 
-/// Inputs and outputs of the node described by this .eray file
+/// Inputs and outputs of the node described by this .eray file.
 signature = { input ~ "->" ~ output ~ ";"? }
 
 
+/// Node importing section.
 imports = { import* }
+/// Node declaration section.
 nodes = { node* }
+/// Node linking section.
 links = { link* }
 
 
-/// Custom node import
+/// Custom node import.
 import = { id ~ ":" ~ signature }
-/// Input sockets
+/// Input sockets.
 input = { "()" | var | ("|" ~ var_seq ~ "|") }
-/// Output sockets
+/// Output sockets.
 output = { var | ("(" ~ var_seq ~ ")") }
 
 
-/// Node declaration
-/// An `@` symbol denotes a custom node (avoid shadowing regular node)
+/// Node declaration.
+/// A `$` symbol denotes a custom node (avoid shadowing regular node).
 node = { id ~ "=" ~ node_ref ~ ";"? }
-/// Node linking from one's output to another's input
+/// Node linking from one's output to another's input.
 link = { (expr | field) ~ "->" ~ field ~ ";"? }
 
 
+/// Comma-separated sequence of variables.
 var_seq = _{ (var ~ ("," ~ var)*)? }
-/// Single typed variable
+/// Single typed variable.
 var = { id ~ ":" ~ ty }
 
 
-/// Literal value of a valid type (ty)
+/// Literal value of a valid type (ty).
 expr = { ty ~ "(" ~ (field | literal) ~ ")" ~ ("." ~ id)* }
 
-/// Node input/output access syntax
+/// Node input/output access syntax.
 field = { (id | meta) ~ ("." ~ id)+ }
 
-/// Meta-variable
+/// Meta-variable.
 meta = @{ "@" ~ ("IN" | "OUT") }
 
-/// Reference to a node during node declaration
+/// Reference to a node during node declaration.
 node_ref = @{ "$"? ~ id }
 
 
-/// Identifier
+/// Identifier.
 id = @{ ASCII_ALPHA ~ ASCII_ALPHANUMERIC* }
-/// Data type
+/// Data type.
 ty = @{ "Value" | "Color" | "Vec3" }
 
 
-/// Literal value
+/// Literal value.
 literal = { vector | value }
 
-/// Float
+/// Float.
 value = { number }
-/// Vec3
+/// Vec3.
 vector = { number ~ ("," ~ number){2} }
 
 
-/// Floating-point number
+/// Floating-point number.
 number = @{ (ASCII_DIGIT | "_")+ ~ ("." ~ (ASCII_DIGIT | "_")*)? }
 
+/// Any whitespace, significant in parsing.
 WHITESPACE = _{ " " | "\t" | NEWLINE }
+/// Full line comments.
 COMMENT = _{ "#" ~ (!"#" ~ ANY)* ~ "#" }
