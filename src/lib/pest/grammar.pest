@@ -16,7 +16,7 @@ links = { link* }
 
 
 /// Custom node import.
-import = { id ~ ":" ~ signature }
+import = { id ~ "=" ~ id ~ ":" ~ signature }
 /// Input sockets.
 input = { "()" | var | ("|" ~ var_seq ~ "|") }
 /// Output sockets.
@@ -50,7 +50,7 @@ node_ref = @{ "$"? ~ id }
 
 
 /// Identifier.
-id = @{ ASCII_ALPHA ~ ASCII_ALPHANUMERIC* }
+id = @{ ASCII_ALPHA ~ ("_" | ASCII_ALPHANUMERIC)* }
 /// Data type.
 ty = @{ "Value" | "Color" | "Vec3" }
 

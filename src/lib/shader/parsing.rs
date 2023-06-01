@@ -88,12 +88,14 @@ pub enum CodeError {
 /// Detail regarding an undefined identifier.
 pub enum UndefinedError {
     /// Identifier is simply undefined.
-    Undefined,
+    Undefined(Name),
     /// Name is undefined but is available in the loaded nodes.
     NotImported {
         #[allow(missing_docs)]
-        node: Name,
+        name: Name,
     },
+    #[allow(missing_docs)]
+    NoSignatureOverload { name: Name, signature: Signature },
 }
 
 #[derive(Debug, Clone)]
@@ -115,9 +117,9 @@ pub enum Section {
 #[grammar = "lib/pest/grammar.pest"]
 struct SParser;
 
-#[derive(Debug)]
-// TODO: Maybe remove and just load node directly
+#[derive(Clone, Debug)]
 struct Import {
+    alias: Name,
     name: Name,
     signature: Signature,
 }
@@ -125,7 +127,7 @@ struct Import {
 /// Constructs a [Graph] from the eray code passed as input
 pub fn parse_shader(
     eray: &str,
-    loaded: &mut HashMap<Name, ImportedNode<Unvalidated>>,
+    loaded: &mut HashMap<Name, Vec<ImportedNode<Unvalidated>>>,
 ) -> PResult<Graph<Unvalidated>> {
     let mut pairs = SParser::parse(Rule::program, eray)
         .map_err(|err| Error::new(ErrorKind::Parsing(err.clone()), err.line_col))?;
@@ -137,14 +139,14 @@ pub fn parse_shader(
 
 fn parse_program(
     program: Pair<Rule>,
-    loaded: &mut HashMap<Name, ImportedNode<Unvalidated>>,
+    loaded: &mut HashMap<Name, Vec<ImportedNode<Unvalidated>>>,
 ) -> PResult<Graph<Unvalidated>> {
     let mut inner = program.into_inner();
 
     let signature = parse_signature(inner.next().unwrap())?;
     let imports = parse_imports(inner.next().unwrap(), loaded)?;
     let mut nodes = parse_nodes(inner.next().unwrap(), loaded, &imports)?;
-    // parse_links(inner.next().unwrap(), &mut nodes)?;
+    // let graph = parse_links(inner.next().unwrap(), &mut nodes)?;
 
     todo!("Finish .eray graph parsing")
 }
@@ -153,44 +155,59 @@ fn lcl_from_bounds((start, end): (Position, Position)) -> LineColLocation {
     LineColLocation::Span(start.line_col(), end.line_col())
 }
 
+fn get_loaded(
+    loaded: &HashMap<Name, Vec<ImportedNode<Unvalidated>>>,
+    name: &Name,
+    signature: &Signature,
+    rule: &Pair<'_, Rule>,
+    section: &Section,
+) -> PResult<ImportedNode<Unvalidated>> {
+    let err = |undef: UndefinedError| {
+        Error::new(
+            ErrorKind::Code {
+                r#type: CodeError::Undefined {
+                    got: name.into(),
+                    guess: Some(name.into()),
+                    variant: undef,
+                },
+                section: section.clone(),
+            },
+            lcl_from_bounds(rule.as_span().split()),
+        )
+    };
+
+    Ok(loaded
+        .get(&name)
+        .ok_or_else(|| err(UndefinedError::Undefined(name.clone())))?
+        .iter()
+        .find(|&loaded| &loaded.signature() == signature)
+        .ok_or_else(|| {
+            err(UndefinedError::NoSignatureOverload {
+                name: name.clone(),
+                signature: signature.clone(),
+            })
+        })?
+        .clone())
+}
+
 fn parse_imports(
     imports: Pair<Rule>,
-    loaded: &mut HashMap<Name, ImportedNode<Unvalidated>>,
+    loaded: &mut HashMap<Name, Vec<ImportedNode<Unvalidated>>>,
 ) -> PResult<Vec<Import>> {
     Ok(imports
         .into_inner()
         .map(|import| {
             parse_import(import.clone()).map(|parsed| {
-                // Check that the required node has been loaded
-                if let Some(loaded) = loaded.get(&parsed.name) {
-                    if parsed.signature == loaded.signature() {
-                        return Ok(parsed);
-                    }
+                // Among the loaded nodes with the same name, is there one with the correct signature?
+                get_loaded(
+                    loaded,
+                    &parsed.name,
+                    &parsed.signature,
+                    &import,
+                    &Section::Imports,
+                )?;
 
-                    return Err(Error::new(
-                        ErrorKind::Code {
-                            r#type: CodeError::SignatureMismatch(
-                                parsed.name,
-                                parsed.signature,
-                                loaded.signature(),
-                            ),
-                            section: Section::Imports,
-                        },
-                        lcl_from_bounds(import.as_span().split()),
-                    ));
-                }
-
-                Err(Error::new(
-                    ErrorKind::Code {
-                        r#type: CodeError::Undefined {
-                            got: String::from(&parsed.name),
-                            guess: None,
-                            variant: UndefinedError::Undefined,
-                        },
-                        section: Section::Imports,
-                    },
-                    lcl_from_bounds(import.as_span().split()),
-                ))
+                Ok(parsed.clone())
             })
         })
         .flatten()
@@ -201,6 +218,7 @@ fn parse_import(import: Pair<Rule>) -> PResult<Import> {
     let mut inner = import.into_inner();
 
     Ok(Import {
+        alias: inner.next().unwrap().as_str().into(),
         name: inner.next().unwrap().as_str().into(),
         signature: parse_signature(inner.next().unwrap())?,
     })
@@ -208,7 +226,7 @@ fn parse_import(import: Pair<Rule>) -> PResult<Import> {
 
 fn parse_nodes(
     nodes: Pair<Rule>,
-    loaded: &HashMap<Name, ImportedNode<Unvalidated>>,
+    loaded: &HashMap<Name, Vec<ImportedNode<Unvalidated>>>,
     imports: &Vec<Import>,
 ) -> PResult<HashMap<NodeId, Node<Unvalidated>>> {
     // XXX
@@ -227,49 +245,47 @@ fn parse_nodes(
 
 fn parse_node(
     node: Pair<Rule>,
-    loaded: &HashMap<Name, ImportedNode<Unvalidated>>,
+    loaded: &HashMap<Name, Vec<ImportedNode<Unvalidated>>>,
     imports: &Vec<Import>,
 ) -> PResult<(NodeId, Node<Unvalidated>)> {
     let mut inner = node.clone().into_inner();
 
+    // Name of the node being declared
     let id = inner.next().unwrap().as_str();
+
+    // Alias of the desired import
     let node_ref = inner.next().unwrap().as_str();
+    let name = Name::from(node_ref);
 
-    if node_ref.chars().next().unwrap() == '$' {
-        let name: Name = node_ref.chars().skip(1).collect::<String>().as_str().into();
-
-        // Check that that custom node has been imported
-        imports
-            .iter()
-            .find(|&import| import.name == node_ref.into())
-            .ok_or_else(|| {
-                Error::new(
-                    ErrorKind::Code {
-                        r#type: CodeError::Undefined {
-                            got: node_ref.to_owned(),
-                            guess: loaded
-                                .contains_key(&name)
-                                .then(|| format!("{:?}", loaded.get(&name).unwrap())),
-                            variant: UndefinedError::NotImported { node: id.into() },
-                        },
-                        section: Section::Nodes,
+    // Check that that custom node has been imported
+    let import = imports
+        .iter()
+        .find(|&import| import.alias == node_ref.into())
+        .ok_or_else(|| {
+            Error::new(
+                ErrorKind::Code {
+                    r#type: CodeError::Undefined {
+                        got: node_ref.to_owned(),
+                        guess: loaded
+                            .contains_key(&name)
+                            .then(|| format!("{:?}", loaded.get(&name).unwrap())),
+                        variant: UndefinedError::NotImported { name: id.into() },
                     },
-                    lcl_from_bounds(node.as_span().split()),
-                )
-            })?;
+                    section: Section::Nodes,
+                },
+                lcl_from_bounds(node.as_span().split()),
+            )
+        })?;
 
-        let imported_node = loaded.get(&name).unwrap().clone();
+    let imported_node = get_loaded(
+        loaded,
+        &import.name,
+        &import.signature,
+        &node,
+        &Section::Nodes,
+    )?;
 
-        Ok((id.into(), Node::Imported(imported_node)))
-    } else {
-        todo!()
-    }
-
-    // if let Some(node) = loaded.get(&stripped) {}
-
-    // let signature = imports.iter().find(|&&import| import.name;
-
-    // Ok(Node::new(id.as_str(), ))
+    Ok((id.into(), Node::Imported(imported_node)))
 }
 
 fn parse_signature(signature: Pair<Rule>) -> PResult<Signature> {
@@ -376,25 +392,47 @@ mod test {
             .expect("Missing `nodes/test.eray` test shader");
 
         let mut loaded = vec![
-            ImportedNode::from((
-                "add",
-                graph! {
-                    inputs:
-                        "lhs": SocketType::Vec3.into(),
-                        "rhs": SocketType::Color.into(),
-                    nodes:
-                        "inner": node! {
-                            inputs:
-                                "lhs": (ssref!(graph "lhs"), SocketType::Vec3.into()),
-                                "rhs": (ssref!(graph "rhs"), SocketType::Color.into()),
-                            outputs:
-                                "value": SocketType::Value.into(),
-                        },
-                    outputs:
-                        "value": (ssref!(node "inner" "value"), SocketType::Value.into())
-                },
-            )),
-            ImportedNode::from((
+            vec![
+                // Value + Value
+                ImportedNode::from((
+                    "add",
+                    graph! {
+                        inputs:
+                            "lhs": SocketType::Value.into(),
+                            "rhs": SocketType::Value.into(),
+                        nodes:
+                            "inner": node! {
+                                inputs:
+                                    "lhs": (ssref!(graph "lhs"), SocketType::Vec3.into()),
+                                    "rhs": (ssref!(graph "rhs"), SocketType::Color.into()),
+                                outputs:
+                                    "value": SocketType::Value.into(),
+                            },
+                        outputs:
+                            "value": (ssref!(node "inner" "value"), SocketType::Value.into())
+                    },
+                )),
+                // Value + Color
+                ImportedNode::from((
+                    "add",
+                    graph! {
+                        inputs:
+                            "lhs": SocketType::Value.into(),
+                            "rhs": SocketType::Color.into(),
+                        nodes:
+                            "inner": node! {
+                                inputs:
+                                    "lhs": (ssref!(graph "lhs"), SocketType::Vec3.into()),
+                                    "rhs": (ssref!(graph "rhs"), SocketType::Color.into()),
+                                outputs:
+                                    "value": SocketType::Value.into(),
+                            },
+                        outputs:
+                            "value": (ssref!(node "inner" "value"), SocketType::Value.into())
+                    },
+                )),
+            ],
+            vec![ImportedNode::from((
                 "noise",
                 graph! {
                     inputs:
@@ -411,10 +449,10 @@ mod test {
                     outputs:
                         "value": (ssref!(node "inner" "value"), SocketType::Value.into())
                 },
-            )),
+            ))],
         ]
         .into_iter()
-        .map(|node| (node.name().clone(), node))
+        .map(|vec| (vec[0].name().clone(), vec))
         .collect();
 
         let res = parse_shader(code.as_str(), &mut loaded);

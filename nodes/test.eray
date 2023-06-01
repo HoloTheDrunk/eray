@@ -2,13 +2,14 @@
 | x: Value, y: Value | -> ( value: Value );
 
 # Define custom nodes expected to be loaded #
-noise: |x: Value, y: Value| -> value: Value;
-add: |lhs: Vec3, rhs: Color| -> value: Value;
+noise = noise: |x: Value, y: Value| -> value: Value;
+add = add: |lhs: Value, rhs: Value| -> value: Value;
+add_vc = add: |lhs: Value, rhs: Color| -> value: Value;
 
 # Declare nodes, $ indicates custom nodes #
-Noise = $noise;
+Noise = noise;
 B = add;
-C = $add;
+C = add_vc;
 
 # Link node sockets #
 @IN.x -> Noise.x;
