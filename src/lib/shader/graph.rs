@@ -125,6 +125,11 @@ impl From<&str> for NodeId {
         Self(value.to_string())
     }
 }
+impl From<&NodeId> for String {
+    fn from(id: &NodeId) -> Self {
+        id.0.clone()
+    }
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 /// Wrapper around [String].

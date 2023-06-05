@@ -1,16 +1,18 @@
 //! .eray input parsing.
-
-use pest::{error::LineColLocation, Position};
+#![allow(unused)]
 
 use super::{
-    graph::{Graph, ImportedNode, Name, Node, NodeId, SocketType, Unvalidated},
+    graph::{Graph, ImportedNode, Name, Node, NodeId, SocketType, SocketValue, Unvalidated},
+    shader::Side,
     Signature,
 };
+
+use crate::{image::Image, vector::Vec3};
 
 use std::{collections::HashMap, fmt::Debug, str::FromStr};
 
 use {
-    pest::{iterators::Pair, Parser},
+    pest::{error::LineColLocation, iterators::Pair, Parser, Position},
     pest_derive::Parser,
 };
 
@@ -33,6 +35,17 @@ use {
 //         }
 //     };
 // }
+
+macro_rules! match_rule {
+    { $pair:ident : $($rule:ident => $action:expr),* $(,)?} => {
+        match $pair.as_rule() {
+            $(
+                Rule::$rule => $action,
+            )*
+            _ => unreachable!(),
+        }
+    }
+}
 
 /// Parsing result.
 pub type PResult<T> = Result<T, self::Error>;
@@ -82,13 +95,15 @@ pub enum CodeError {
     SignatureMismatch(Name, Signature, Signature),
     /// Mismatch between two sockets' types.
     SocketType(SocketType, SocketType),
+    /// Trying to link two inputs or two outputs.
+    SideMismatch,
 }
 
 #[derive(Debug, Clone)]
 /// Detail regarding an undefined identifier.
 pub enum UndefinedError {
     /// Identifier is simply undefined.
-    Undefined(Name),
+    Undefined,
     /// Name is undefined but is available in the loaded nodes.
     NotImported {
         #[allow(missing_docs)]
@@ -122,6 +137,19 @@ struct Import {
     alias: Name,
     name: Name,
     signature: Signature,
+}
+
+#[derive(Clone, Debug)]
+struct Link {
+    prev: LinkSide,
+    next: LinkSide,
+}
+
+#[derive(Clone, Debug)]
+enum LinkSide {
+    NodeSocket(NodeId, Name),
+    GraphSocket(Name),
+    Value(SocketValue),
 }
 
 /// Constructs a [Graph] from the eray code passed as input
@@ -178,7 +206,7 @@ fn get_loaded(
 
     Ok(loaded
         .get(&name)
-        .ok_or_else(|| err(UndefinedError::Undefined(name.clone())))?
+        .ok_or_else(|| err(UndefinedError::Undefined))?
         .iter()
         .find(|&loaded| &loaded.signature() == signature)
         .ok_or_else(|| {
@@ -286,6 +314,155 @@ fn parse_node(
     )?;
 
     Ok((id.into(), Node::Imported(imported_node)))
+}
+
+fn parse_links(
+    links: Pair<Rule>,
+    graph_signature: &Signature,
+    nodes: &mut HashMap<NodeId, Node<Unvalidated>>,
+) -> PResult<Vec<Link>> {
+    links
+        .into_inner()
+        .map(|link| parse_link(link, graph_signature, nodes))
+        .collect()
+}
+
+fn parse_link(
+    link: Pair<Rule>,
+    graph_signature: &Signature,
+    nodes: &mut HashMap<NodeId, Node<Unvalidated>>,
+) -> PResult<Vec<Link>> {
+    let mut inner = link.clone().into_inner();
+
+    let (lhs, rhs) = (inner.next().unwrap(), inner.next().unwrap());
+
+    let lhs_parsed = match_rule! {
+        lhs:
+            expr => parse_expr(lhs, graph_signature, nodes),
+            field => parse_field(lhs, graph_signature, nodes, &Side::Input),
+    };
+
+    todo!()
+}
+
+fn parse_expr(
+    expr: Pair<Rule>,
+    graph_signature: &Signature,
+    nodes: &mut HashMap<NodeId, Node<Unvalidated>>,
+) -> PResult<(LinkSide, SocketType)> {
+    let mut inner = expr.clone().into_inner();
+
+    let ty = SocketType::from_str(inner.next().unwrap().as_str());
+    let value = inner.next().unwrap();
+    let value = match_rule! {
+        value:
+            field => parse_field(value, graph_signature, nodes, &Side::Input),
+            literal => parse_literal(value, graph_signature, nodes),
+    }?;
+
+    todo!()
+}
+
+fn parse_literal(
+    literal: Pair<Rule>,
+    graph_signature: &Signature,
+    nodes: &mut HashMap<NodeId, Node<Unvalidated>>,
+) -> PResult<(LinkSide, SocketValue)> {
+    let mut inner = literal.clone().into_inner().next().unwrap();
+
+    let value = match_rule! {
+        inner:
+            value => SocketValue::Value(Some(Image::new(1, 1, inner.into_inner().next().unwrap().as_str().parse::<f32>().unwrap()))),
+            vector => {
+                let values = inner
+                    .into_inner()
+                    .map(|number| number.as_str().parse::<f32>())
+                    .collect::<Result<Vec<f32>, _>>()
+                    .unwrap();
+
+                let image = Image::new(1, 1, Vec3::new(values[0], values[1], values[2]));
+
+                SocketValue::Vec3(Some(image))
+            },
+    };
+
+    let duplicate_count = nodes
+        .keys()
+        .filter(|&key| String::from(key).as_str().starts_with("constant"))
+        .count();
+
+    todo!()
+}
+
+fn parse_field(
+    field: Pair<Rule>,
+    graph_signature: &Signature,
+    nodes: &HashMap<NodeId, Node<Unvalidated>>,
+    side: &Side,
+) -> PResult<(LinkSide, SocketType)> {
+    let mut inner = field.clone().into_inner();
+
+    let source = inner.next().unwrap();
+    let source = match_rule! {
+        source:
+            id => Ok(Some(NodeId::from(source.as_str()))),
+            meta => match (side, source.as_str()) {
+                (Side::Input, "@IN") | (Side::Output, "@OUT") => Ok(None),
+                _ => Err(Error::new(
+                    ErrorKind::Code {
+                        r#type: CodeError::SideMismatch,
+                        section: Section::Links
+                    },
+                    lcl_from_bounds(source.as_span().split())
+                )),
+            },
+    }?;
+
+    let socket = Name::from(inner.next().unwrap().as_str());
+
+    let error = |name: String| {
+        Error::new(
+            ErrorKind::Code {
+                r#type: CodeError::Undefined {
+                    got: name,
+                    guess: None,
+                    variant: UndefinedError::Undefined,
+                },
+                section: Section::Links,
+            },
+            lcl_from_bounds(field.as_span().split()),
+        )
+    };
+
+    Ok(match source {
+        Some(node_id) => {
+            let r#type = nodes
+                .get(&node_id)
+                .map(|node| match side {
+                    Side::Input => node.signature().output.get(&socket).cloned(),
+                    Side::Output => node.signature().input.get(&socket).cloned(),
+                })
+                .flatten()
+                .ok_or_else(|| error(String::from(&node_id)))?
+                .clone();
+            (LinkSide::NodeSocket(node_id, socket), r#type)
+        }
+        None => {
+            let r#type = match side {
+                Side::Input => graph_signature
+                    .input
+                    .get(&socket)
+                    .ok_or_else(|| error(format!("@IN.{}", String::from(&socket))))?,
+                Side::Output => graph_signature
+                    .output
+                    .get(&socket)
+                    .ok_or_else(|| error(format!("@OUT.{}", String::from(&socket))))?,
+            }
+            .clone();
+
+            (LinkSide::GraphSocket(socket), r#type)
+        }
+    })
 }
 
 fn parse_signature(signature: Pair<Rule>) -> PResult<Signature> {

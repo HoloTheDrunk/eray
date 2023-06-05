@@ -25,7 +25,7 @@ pub enum Error {
     Unknown(Option<String>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 /// Socket side.
 pub enum Side {
     #[allow(missing_docs)]
