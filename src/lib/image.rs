@@ -24,7 +24,7 @@ pub struct Image<T> {
 
 impl<T: Clone> Image<T> {
     /// Create an image from a pixel width and height and a default value
-    pub fn init(width: u32, height: u32, value: T) -> Self {
+    pub fn new(width: u32, height: u32, value: T) -> Self {
         Self {
             width,
             height,
