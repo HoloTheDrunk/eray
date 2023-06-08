@@ -1,5 +1,5 @@
 //! [Object] and [OpenGLObject] definitions along with auxilliary / helper functions and data
-//! structures
+//! structures.
 
 use std::{
     mem::{size_of, size_of_val},
@@ -9,6 +9,7 @@ use std::{
 };
 
 use crate::{
+    material::Material,
     primitives::{Triangle, Vertex},
     raycasting::{Ray, RaycastHit},
     vector::Vec3,
@@ -16,54 +17,62 @@ use crate::{
 };
 
 #[derive(Debug)]
-/// OpenGL-ready helper struct
+/// OpenGL-ready helper struct.
 pub struct OpenGLObject {
-    /// OpenGL index of this object's vertices VBO
+    /// OpenGL index of this object's vertices VBO.
     pub vertices_vbo: u32,
-    /// OpenGL index of this object's normals VBO
+    /// OpenGL index of this object's normals VBO.
     pub normals_vbo: Option<u32>,
 }
 
 #[derive(Debug)]
-/// Full object with metadata and optimization info
+/// Full object with metadata and optimization info.
 pub struct Object<State> {
-    /// Current state ([Building]/[Built])
+    /// Current state ([Building]/[Built]).
     pub state: std::marker::PhantomData<State>,
 
-    /// Name tag
+    /// Name tag.
     pub name: Option<String>,
 
-    /// Vertex positions
+    /// Vertex positions.
     pub vertices: Vec<Vec3>,
-    /// Normal directions
+    /// Normal directions.
     pub normals: Vec<Vec3>,
+    /// Texture UV positions.
+    pub uvs: Vec<Vec3>,
 
-    /// All faces are 3-gons (i.e. [Triangle] instances)
+    /// All faces are 3-gons (i.e. [Triangle] instances).
     pub faces: Vec<Triangle>,
 
-    /// Min and max coordinates of the object in x, y and z
+    /// Min and max coordinates of the object in x, y and z.
     pub bounding_box: BoundingBox,
+
+    /// Object material.
+    pub material: Material,
 }
 
 impl Object<Built> {
     /// Check if a ray intersects the object and return intersection information.
     ///
     /// Uses the contained [BoundingBox] to ignore objects.
-    fn intersects(&self, ray: &Ray) -> Option<RaycastHit> {
+    pub fn intersects(&self, ray: &Ray) -> Option<RaycastHit> {
         if !self.bounding_box.intersects(ray) {
             return None;
         }
 
         for (index, face) in self.faces.iter().enumerate() {
-            if let Some((position, normal)) = face.intersects(ray) {
+            if let Some((position, normal, barycentric)) = face.intersects(ray) {
                 return Some(RaycastHit {
                     face_index: index,
                     position,
                     normal,
-                    color: todo!(),
-                    diffuse: todo!(),
-                    specular: todo!(),
-                    specular_power: todo!(),
+                    material: {
+                        let uv = face.a.uv * barycentric.z
+                            + face.b.uv * barycentric.x
+                            + face.c.uv * barycentric.y;
+
+                        self.material.get(uv.x as u32, uv.y as u32)
+                    },
                 });
             }
         }
@@ -79,8 +88,10 @@ impl Default for Object<Building> {
             name: Some(String::default()),
             vertices: vec![],
             normals: vec![],
+            uvs: vec![],
             faces: vec![],
             bounding_box: BoundingBox::default(),
+            material: Material::default(),
         }
     }
 }
@@ -103,6 +114,7 @@ impl Object<Building> {
                 Vertex {
                     position: self.vertices[indices[0].unwrap() - 1],
                     normal: self.normals[indices[1].unwrap() - 1],
+                    uv: self.uvs[indices[2].unwrap() - 1],
                 }
             })
             .collect::<Vec<_>>();
@@ -116,20 +128,20 @@ impl Object<Building> {
 
         let mut vertices = vertices.into_iter();
 
-        self.faces.push(Triangle {
-            a: vertices.next().unwrap(),
-            b: vertices.next().unwrap(),
-            c: vertices.next().unwrap(),
-        });
+        self.faces.push(Triangle::new(
+            vertices.next().unwrap(),
+            vertices.next().unwrap(),
+            vertices.next().unwrap(),
+        ));
     }
 
-    /// Set object name (optional)
+    /// Set object name (optional).
     pub fn name(&mut self, name: &str) -> &mut Self {
         self.name = Some(name.to_owned());
         self
     }
 
-    /// Set object vertices (mandatory)
+    /// Set object vertices (mandatory).
     pub fn vertices(&mut self, vertices: impl Iterator<Item = Vec3>) -> &mut Self {
         self.vertices = vertices.collect();
 
@@ -141,13 +153,13 @@ impl Object<Building> {
         self
     }
 
-    /// Set object normals (mandatory)
+    /// Set object normals (mandatory).
     pub fn normals(&mut self, normals: impl Iterator<Item = Vec3>) -> &mut Self {
         self.normals = normals.collect();
         self
     }
 
-    /// Lock object's fields and allow for OpenGL conversion
+    /// Lock object's fields and allow for OpenGL conversion.
     pub fn build(self) -> Result<Object<Built>, &'static str> {
         if self.vertices.is_empty() {
             Err("Missing vertices")
@@ -159,15 +171,17 @@ impl Object<Building> {
                 name: self.name,
                 vertices: self.vertices,
                 normals: self.normals,
+                uvs: self.uvs,
                 faces: self.faces,
                 bounding_box: self.bounding_box,
+                material: self.material,
             })
         }
     }
 }
 
 impl Object<Built> {
-    /// Load an object from a Wavefront .obj file
+    /// Load an object from a Wavefront .obj file.
     pub fn load_obj(path: &Path) -> std::io::Result<Self> {
         let content = std::fs::read_to_string(path)?;
 
@@ -265,8 +279,10 @@ impl Object<Built> {
                 name: self.name,
                 vertices: self.vertices,
                 normals: self.normals,
+                uvs: self.uvs,
                 faces: self.faces,
                 bounding_box: self.bounding_box,
+                material: self.material,
             },
             OpenGLObject {
                 vertices_vbo: vbos[0].unwrap(),
@@ -279,11 +295,11 @@ impl Object<Built> {
 #[derive(Debug, Default)]
 /// Spatial limits of the object's vertices relative to its origin.
 pub struct BoundingBox {
-    /// X-axis limits (left -> right)
+    /// X-axis limits (left -> right).
     pub x: Range<f32>,
-    /// Y-axis limits (down -> up)
+    /// Y-axis limits (down -> up).
     pub y: Range<f32>,
-    /// Z-axis limits (backwards -> forwards)
+    /// Z-axis limits (backwards -> forwards).
     pub z: Range<f32>,
 }
 

@@ -5,6 +5,7 @@
 
 pub mod color;
 pub mod image;
+pub mod material;
 pub mod matrix;
 pub mod object;
 pub mod primitives;

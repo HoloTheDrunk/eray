@@ -334,6 +334,7 @@ impl Graph<Validated> {
             .outputs
             .clone()
             .into_iter()
+            .filter(|(_name, (_ref, value))| value.is_none())
             .map(|output| {
                 let (name, (socket_ref, mut value)) = output;
 

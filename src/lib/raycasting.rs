@@ -1,6 +1,6 @@
 //! Structs required for raycasting
 
-use crate::color::Color;
+use crate::{color::Color, material::MaterialOutputBundle};
 
 use super::vector::Vec3;
 
@@ -48,13 +48,6 @@ pub struct RaycastHit {
     /// World-space direction of the normal at the hit's position.
     pub normal: Vec3,
 
-    /// Color of the hit face.
-    pub color: Color,
-
-    /// Diffuse property of the hit face (k_d).
-    pub diffuse: f32,
-    /// Specular property of the hit face (k_s).
-    pub specular: f32,
-    /// Specular power property of the hit face.
-    pub specular_power: f32,
+    /// Material properties at the hit point
+    pub material: MaterialOutputBundle,
 }
