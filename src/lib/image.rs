@@ -6,7 +6,7 @@ use std::{
     path::Path,
 };
 
-use crate::vector::Vec3;
+use crate::vector::Vector;
 
 use super::color::Color;
 
@@ -74,12 +74,18 @@ impl Image<Color> {
     }
 }
 
-impl From<Image<Vec3>> for Image<Color> {
-    fn from(value: Image<Vec3>) -> Self {
+impl<IC: Copy + Into<f32>> From<Image<Vector<3, IC>>> for Image<Color> {
+    fn from(
+        Image::<Vector<3, IC>> {
+            width,
+            height,
+            pixels,
+        }: Image<Vector<3, IC>>,
+    ) -> Self {
         Self {
-            width: value.width,
-            height: value.height,
-            pixels: value.pixels.into_iter().map(|v| Color::from(v)).collect(),
+            width,
+            height,
+            pixels: pixels.into_iter().map(|v| Color::from(v)).collect(),
         }
     }
 }
