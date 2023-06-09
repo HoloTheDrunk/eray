@@ -6,7 +6,7 @@ use eray::{
     object::Object,
     primitives::*,
     raycasting::{Ray, RaycastHit},
-    vector::Vec3,
+    vector::Vector,
 };
 
 fn main() {

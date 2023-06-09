@@ -7,7 +7,7 @@ use std::{
 
 use ::derive_more::{Add, AddAssign};
 
-use crate::vector::Vec3;
+use crate::vector::Vector;
 
 #[derive(Clone, Copy, Default, Debug, Add, AddAssign, PartialEq)]
 /// RGB color data type
@@ -87,9 +87,9 @@ impl Div<f32> for Color {
     }
 }
 
-impl From<Vec3> for Color {
-    fn from(value: Vec3) -> Self {
-        Color::new(value.x, value.y, value.z)
+impl<T: Copy + Into<f32>> From<Vector<3, T>> for Color {
+    fn from(value: Vector<3, T>) -> Self {
+        Color::new(value[0].into(), value[1].into(), value[2].into())
     }
 }
 

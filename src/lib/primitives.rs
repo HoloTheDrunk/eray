@@ -1,31 +1,31 @@
 //! Basic primitives necessary for rendering
 
-use crate::{raycasting::Ray, vector::Vec3};
+use crate::{raycasting::Ray, vector::Vector};
 
 #[derive(Debug, Default)]
 /// A mesh vertex.
-pub struct Vertex {
+pub struct Vertex<const DIM: usize = 3, TYPE: Copy = f32> {
     /// XYZ position.
-    pub position: Vec3,
+    pub position: Vector<DIM, TYPE>,
     /// XYZ normal.
-    pub normal: Vec3,
+    pub normal: Vector<DIM, TYPE>,
     /// UV(W) texture coordinates.
-    pub uv: Vec3,
+    pub uv: Vector<DIM, TYPE>,
 }
 
 #[derive(Debug, Default)]
 /// Group of 3 vertices.
 ///
 /// The surface normal is always calculated as (b - a) x (c - a).
-pub struct Triangle {
+pub struct Triangle<const DIM: usize = 3, TYPE: Copy = f32> {
     #[allow(missing_docs)]
-    pub a: Vertex,
+    pub a: Vertex<DIM, TYPE>,
     #[allow(missing_docs)]
-    pub b: Vertex,
+    pub b: Vertex<DIM, TYPE>,
     #[allow(missing_docs)]
-    pub c: Vertex,
+    pub c: Vertex<DIM, TYPE>,
 
-    normal: Vec3,
+    normal: Vector,
 }
 
 impl Triangle {
@@ -38,7 +38,7 @@ impl Triangle {
     /// Check for intersection with the provided [Ray] with backface culling.
     ///
     /// Returns a world-space position, world-space normalized surface normal vector and a barycentric position.
-    pub fn intersects(&self, ray: &Ray) -> Option<(Vec3, Vec3, Vec3)> {
+    pub fn intersects(&self, ray: &Ray) -> Option<(Vector, Vector, Vector)> {
         // TODO: Check for ray / normal match to do backface culling
         let [a, b, c] = [self.a.position, self.b.position, self.c.position];
 
@@ -67,13 +67,13 @@ impl Triangle {
                 *ray.start() + *ray.dir() * t,
                 (self.a.normal * u + self.b.normal * v + self.c.normal * t).normalize(),
                 // TODO: This is invalid, figure out how the fuck barycentric coordinates work
-                Vec3::new(u, v, 1. - u - v),
+                Vector::new(u, v, 1. - u - v),
             )
         })
     }
 
     /// Returns the projected coordinates of the point on the triangle.
-    pub fn project(&self, point: Vec3) -> Vec3 {
+    pub fn project(&self, point: Vector) -> Vector {
         let v = point - self.a.position;
         let dist = v.dot_product(&self.normal);
         let res = point - self.normal * dist;
@@ -90,25 +90,25 @@ mod test {
     fn projection() {
         let triangle = Triangle::new(
             Vertex {
-                position: Vec3::new(-0.5, 0., -0.5),
-                normal: Vec3::new(0., 1., 0.),
-                uv: Vec3::new(0., 0., 0.),
+                position: Vector::new(-0.5, 0., -0.5),
+                normal: Vector::new(0., 1., 0.),
+                uv: Vector::new(0., 0., 0.),
             },
             Vertex {
-                position: Vec3::new(0., 0., 0.5),
-                normal: Vec3::new(0., 1., 0.),
-                uv: Vec3::new(0.5, 1., 0.),
+                position: Vector::new(0., 0., 0.5),
+                normal: Vector::new(0., 1., 0.),
+                uv: Vector::new(0.5, 1., 0.),
             },
             Vertex {
-                position: Vec3::new(0.5, 0., -0.5),
-                normal: Vec3::new(0., 1., 0.),
-                uv: Vec3::new(1., 0., 0.),
+                position: Vector::new(0.5, 0., -0.5),
+                normal: Vector::new(0., 1., 0.),
+                uv: Vector::new(1., 0., 0.),
             },
         );
 
-        let point = Vec3::new(0.2, 0.1, 0.);
+        let point = Vector::new(0.2, 0.1, 0.);
         let proj = triangle.project(point);
 
-        assert_eq!(Vec3::new(0.2, 0., 0.), proj);
+        assert_eq!(Vector::new(0.2, 0., 0.), proj);
     }
 }

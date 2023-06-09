@@ -13,6 +13,9 @@ pub mod raycasting;
 pub mod shader;
 pub mod vector;
 
+const DEFAULT_DIM: usize = 3;
+type DefaultType = f32;
+
 macro_rules! states {
     {$($(#[$attr:meta])* $state:ident),+ $(,)?} => {
         $(
