@@ -1,10 +1,14 @@
 //! 3D vector definition
 
+use super::{DefaultType, DEFAULT_DIM};
+
+use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
+
 use paste::paste;
-use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
 #[derive(PartialEq, Clone, Copy, Debug)]
-pub struct Vector<const DIM: usize = 3, TYPE = f32> {
+/// DIM-dimensional vector of TYPE values.
+pub struct Vector<const DIM: usize = DEFAULT_DIM, TYPE = DefaultType> {
     inner: [TYPE; DIM],
 }
 
@@ -13,6 +17,20 @@ impl<const DIM: usize, TYPE: Default + Copy> Default for Vector<DIM, TYPE> {
         Self {
             inner: [TYPE::default(); DIM],
         }
+    }
+}
+
+impl<const DIM: usize, TYPE> Index<usize> for Vector<DIM, TYPE> {
+    type Output = TYPE;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.inner[index]
+    }
+}
+
+impl<const DIM: usize, TYPE> IndexMut<usize> for Vector<DIM, TYPE> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.inner[index]
     }
 }
 
@@ -54,7 +72,7 @@ into_primitive_array!(i32, i64, f32, f64);
 macro_rules! impl_vec_vec_op {
     ($trait:ident, $function:ident, $($op:tt)+) => {
         paste! {
-            impl<const DIM: usize, TYPE: [<$trait Assign>]<TYPE>> [<$trait Assign>]<Self> for Vector<DIM, TYPE> {
+            impl<const DIM: usize, TYPE: Copy + [<$trait Assign>]<TYPE>> [<$trait Assign>]<Self> for Vector<DIM, TYPE> {
                 fn [<$function _assign>](&mut self, rhs: Self) {
                     for (l, r) in self.inner.iter_mut().zip(rhs.inner.iter()) {
                         *l $($op)+ *r;
@@ -62,10 +80,10 @@ macro_rules! impl_vec_vec_op {
                 }
             }
 
-            impl<const DIM: usize, TYPE: [<$trait Assign>]<TYPE>> $trait<Self> for Vector<DIM, TYPE> {
+            impl<const DIM: usize, TYPE: Copy + [<$trait Assign>]<TYPE>> $trait<Self> for Vector<DIM, TYPE> {
                 type Output = Self;
 
-                fn $function(self, rhs: Self) -> Self::Output {
+                fn $function(mut self, rhs: Self) -> Self::Output {
                     self $($op)+ rhs;
                     self
                 }
@@ -80,7 +98,7 @@ impl_vec_vec_op! (Sub, sub, -=);
 macro_rules! impl_vec_type_op {
     ($trait:ident, $function:ident, $($op:tt)+) => {
         paste! {
-            impl<const DIM: usize, TYPE: [<$trait Assign>]<TYPE>> [<$trait Assign>]<TYPE> for Vector<DIM, TYPE> {
+            impl<const DIM: usize, TYPE: Copy + [<$trait Assign>]<TYPE>> [<$trait Assign>]<TYPE> for Vector<DIM, TYPE> {
                 fn [<$function _assign>](&mut self, rhs: TYPE) {
                     for v in self.inner.as_mut_slice() {
                         *v $($op)+ rhs;
@@ -88,10 +106,10 @@ macro_rules! impl_vec_type_op {
                 }
             }
 
-            impl<const DIM: usize, TYPE: [<$trait Assign>]<TYPE>> $trait<TYPE> for Vector<DIM, TYPE> {
+            impl<const DIM: usize, TYPE: Copy + [<$trait Assign>]<TYPE>> $trait<TYPE> for Vector<DIM, TYPE> {
                 type Output = Self;
 
-                fn $function(self, rhs: TYPE) -> Self::Output {
+                fn $function(mut self, rhs: TYPE) -> Self::Output {
                     self $($op)+ rhs;
                     self
                 }
@@ -116,7 +134,14 @@ impl<TYPE> Vector<3, TYPE> {
 
 impl<
         const DIM: usize,
-        TYPE: Default + Add<Output = TYPE> + Mul<Output = TYPE> + DivAssign<TYPE> + From<f32> + Into<f32>,
+        TYPE: Default
+            + Copy
+            + Add<Output = TYPE>
+            + Mul<Output = TYPE>
+            + Div<Output = TYPE>
+            + DivAssign<TYPE>
+            + From<f32>
+            + Into<f32>,
     > Vector<DIM, TYPE>
 {
     #[inline]
@@ -137,9 +162,21 @@ impl<
         let res = dot / (self.len() * other.len());
         res.acos()
     }
+
+    #[inline]
+    /// Performs `above / self` element-wise.
+    pub fn div_under(mut self, above: TYPE) -> Self {
+        for v in self.inner.iter_mut() {
+            *v = above / *v;
+        }
+
+        self
+    }
 }
 
-impl<const DIM: usize, TYPE: Default + Add<Output = TYPE> + Mul<Output = TYPE>> Vector<DIM, TYPE> {
+impl<const DIM: usize, TYPE: Copy + Default + Add<Output = TYPE> + Mul<Output = TYPE>>
+    Vector<DIM, TYPE>
+{
     #[inline]
     /// Get squared length of the vector, slightly faster than [Vec3::len].
     pub fn len_sq(&self) -> TYPE {
@@ -155,12 +192,12 @@ impl<const DIM: usize, TYPE: Default + Add<Output = TYPE> + Mul<Output = TYPE>> 
     }
 }
 
-impl<TYPE: Mul<Output = TYPE> + Sub<TYPE, Output = TYPE>> Vector<3, TYPE> {
+impl<TYPE: Copy + Mul<Output = TYPE> + Sub<TYPE, Output = TYPE>> Vector<3, TYPE> {
     /// Perform cross product with `other`.
     pub fn cross_product(&self, other: &Self) -> Self {
         Vector {
             inner: [
-                other.inner[2] * self.inner[1] - self.inner[0] * other.inner[1],
+                other.inner[2] * self.inner[1] - self.inner[2] * other.inner[1],
                 other.inner[0] * self.inner[2] - self.inner[0] * other.inner[2],
                 other.inner[1] * self.inner[0] - self.inner[1] * other.inner[0],
             ],
@@ -181,7 +218,13 @@ mod test {
     }
 
     #[test]
-    fn test_dot_product() {
+    /// This will break if generics are very poorly defined.
+    fn generics() {
+        Vector::<3, f32>::new(1., 2., 3.).normalize();
+    }
+
+    #[test]
+    fn dot_product() {
         let (first, second) = get_vecs();
         let got = first.dot_product(&second);
         let expected = 2.8;
@@ -194,7 +237,7 @@ mod test {
     }
 
     #[test]
-    fn test_cross_product() {
+    fn cross_product() {
         let (first, second) = get_vecs();
 
         let got: Vector<3, f32> = first.cross_product(&second);
@@ -208,7 +251,7 @@ mod test {
     }
 
     #[test]
-    fn test_angle() {
+    fn angle() {
         let (first, second) = get_vecs();
 
         let got = first.angle_to(&second);

@@ -12,7 +12,7 @@ use crate::{
     material::Material,
     primitives::{Triangle, Vertex},
     raycasting::{Ray, RaycastHit},
-    vector::Vec3,
+    vector::Vector,
     Building, Built, GLConsumed,
 };
 
@@ -35,14 +35,14 @@ pub struct Object<State> {
     pub name: Option<String>,
 
     /// Vertex positions.
-    pub vertices: Vec<Vec3>,
+    pub vertices: Vec<Vector<3, f32>>,
     /// Normal directions.
-    pub normals: Vec<Vec3>,
+    pub normals: Vec<Vector<3, f32>>,
     /// Texture UV positions.
-    pub uvs: Vec<Vec3>,
+    pub uvs: Vec<Vector<3, f32>>,
 
     /// All faces are 3-gons (i.e. [Triangle] instances).
-    pub faces: Vec<Triangle>,
+    pub faces: Vec<Triangle<3, f32>>,
 
     /// Min and max coordinates of the object in x, y and z.
     pub bounding_box: BoundingBox,
@@ -67,11 +67,11 @@ impl Object<Built> {
                     position,
                     normal,
                     material: {
-                        let uv = face.a.uv * barycentric.z
-                            + face.b.uv * barycentric.x
-                            + face.c.uv * barycentric.y;
+                        let uv = face.a.uv * barycentric[2]
+                            + face.b.uv * barycentric[0]
+                            + face.c.uv * barycentric[1];
 
-                        self.material.get(uv.x as u32, uv.y as u32)
+                        self.material.get(uv[0] as u32, uv[1] as u32)
                     },
                 });
             }
@@ -142,7 +142,7 @@ impl Object<Building> {
     }
 
     /// Set object vertices (mandatory).
-    pub fn vertices(&mut self, vertices: impl Iterator<Item = Vec3>) -> &mut Self {
+    pub fn vertices(&mut self, vertices: impl Iterator<Item = Vector<3, f32>>) -> &mut Self {
         self.vertices = vertices.collect();
 
         self.bounding_box = BoundingBox::default();
@@ -154,7 +154,7 @@ impl Object<Building> {
     }
 
     /// Set object normals (mandatory).
-    pub fn normals(&mut self, normals: impl Iterator<Item = Vec3>) -> &mut Self {
+    pub fn normals(&mut self, normals: impl Iterator<Item = Vector<3, f32>>) -> &mut Self {
         self.normals = normals.collect();
         self
     }
@@ -243,7 +243,7 @@ impl Object<Built> {
                         // Normalized?
                         gl::FALSE,
                         // Stride (could also be 0 here)
-                        size_of::<Vec3>().try_into().unwrap(),
+                        size_of::<Vector<3, f32>>().try_into().unwrap(),
                         // Pointer in VBO
                         0 as *const _,
                     );
@@ -292,6 +292,7 @@ impl Object<Built> {
     }
 }
 
+// TODO: Make N-dimensional..?
 #[derive(Debug, Default)]
 /// Spatial limits of the object's vertices relative to its origin.
 pub struct BoundingBox {
@@ -305,10 +306,10 @@ pub struct BoundingBox {
 
 impl BoundingBox {
     /// Get the start and end opposite corners of the [BoundingBox].
-    pub fn bounds(&self) -> [Vec3; 2] {
+    pub fn bounds(&self) -> [Vector<3, f32>; 2] {
         [
-            Vec3::new(self.x.start, self.y.start, self.z.start),
-            Vec3::new(self.x.end, self.y.end, self.z.end),
+            Vector::new(self.x.start, self.y.start, self.z.start),
+            Vector::new(self.x.end, self.y.end, self.z.end),
         ]
     }
 
@@ -316,8 +317,8 @@ impl BoundingBox {
     pub fn intersects(&self, ray: &Ray) -> bool {
         let start = ray.start();
 
-        let invdir = 1. / *ray.dir();
-        let signs = Vec3::from(
+        let invdir = ray.dir().div_under(1.);
+        let signs = Vector::<3, f32>::from(
             Into::<[f32; 3]>::into(invdir)
                 .iter()
                 .map(|&v| (v < 0.) as u32 as f32)
@@ -326,11 +327,11 @@ impl BoundingBox {
         );
         let bounds = self.bounds();
 
-        let mut txmin = (bounds[signs.x as usize].x - start.x) * invdir.x;
-        let mut txmax = (bounds[1 - signs.x as usize].x - start.x) * invdir.x;
+        let mut txmin = (bounds[signs[0] as usize][0] - start[0]) * invdir[0];
+        let mut txmax = (bounds[1 - signs[0] as usize][0] - start[0]) * invdir[0];
 
-        let tymin = (bounds[signs.y as usize].y - start.y) * invdir.y;
-        let tymax = (bounds[1 - signs.y as usize].y - start.y) * invdir.y;
+        let tymin = (bounds[signs[1] as usize][1] - start[1]) * invdir[1];
+        let tymax = (bounds[1 - signs[1] as usize][1] - start[1]) * invdir[1];
 
         if (txmin > tymax) || (tymin > txmax) {
             return false;
@@ -344,8 +345,8 @@ impl BoundingBox {
             txmax = tymax;
         }
 
-        let tzmin = (bounds[signs.z as usize].z - start.z) * invdir.z;
-        let tzmax = (bounds[1 - signs.z as usize].z - start.z) * invdir.z;
+        let tzmin = (bounds[signs[2] as usize][2] - start[2]) * invdir[2];
+        let tzmax = (bounds[1 - signs[2] as usize][2] - start[2]) * invdir[2];
 
         if tzmin > txmin {
             txmin = tzmin;
@@ -367,17 +368,17 @@ impl BoundingBox {
         return true;
     }
 
-    fn stretch_to(&mut self, pos: &Vec3) {
-        if pos.x < self.x.start {
-            self.x.start = pos.x;
-        } else if pos.x > self.x.end {
-            self.x.end = pos.x;
+    fn stretch_to(&mut self, pos: &Vector<3, f32>) {
+        if pos[0] < self.x.start {
+            self.x.start = pos[0];
+        } else if pos[0] > self.x.end {
+            self.x.end = pos[0];
         }
 
-        if pos.y < self.y.start {
-            self.y.start = pos.y;
-        } else if pos.y > self.y.end {
-            self.y.end = pos.y;
+        if pos[1] < self.y.start {
+            self.y.start = pos[1];
+        } else if pos[1] > self.y.end {
+            self.y.end = pos[1];
         }
     }
 }

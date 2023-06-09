@@ -10,7 +10,7 @@ use std::{
 
 use super::{shader::Shader, Signature};
 
-use crate::{color::Color, image::Image, vector::Vec3};
+use crate::{color::Color, image::Image, vector::Vector};
 
 macro_rules! socket_value {
     { $($(#[$attr:meta])* $name:ident : $type:ty = $default:expr),+ $(,)? } => {
@@ -112,7 +112,7 @@ socket_value! {
     /// Image of floating-point values
     Value: Image<f32> = Image::default(),
     /// Image of [3D vectors](Vec3)
-    Vec3: Image<Vec3> = Image::default(),
+    Vec3: Image<Vector<3, f32>> = Image::default(),
     /// Image of [colors](Color)
     Color: Image<Color> = Image::default(),
 }
