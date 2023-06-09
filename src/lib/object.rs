@@ -39,7 +39,7 @@ pub struct Object<State> {
     /// Normal directions.
     pub normals: Vec<Vector<3, f32>>,
     /// Texture UV positions.
-    pub uvs: Vec<Vector<3, f32>>,
+    pub uvs: Vec<Vector<2, f32>>,
 
     /// All faces are 3-gons (i.e. [Triangle] instances).
     pub faces: Vec<Triangle<3, f32>>,
@@ -99,12 +99,17 @@ impl Default for Object<Building> {
 impl Object<Building> {
     fn push_vertex(&mut self, line: usize, tokens: SplitWhitespace) {
         let coords = parse_coords(tokens, Some(line));
-        self.vertices.push(coords[0..2].into());
+        self.vertices.push(coords[0..=2].into());
     }
 
     fn push_normal(&mut self, line: usize, tokens: SplitWhitespace) {
         let coords = parse_coords(tokens, Some(line));
-        self.normals.push(coords[0..2].into());
+        self.normals.push(coords[0..=2].into());
+    }
+
+    fn push_uv(&mut self, line: usize, tokens: SplitWhitespace) {
+        let coords = parse_coords(tokens, Some(line));
+        self.uvs.push(coords[0..=1].into());
     }
 
     fn push_face(&mut self, line: usize, tokens: SplitWhitespace) {
@@ -113,8 +118,8 @@ impl Object<Building> {
                 let indices = parse_indices(token);
                 Vertex {
                     position: self.vertices[indices[0].unwrap() - 1],
-                    normal: self.normals[indices[1].unwrap() - 1],
-                    uv: self.uvs[indices[2].unwrap() - 1],
+                    uv: self.uvs[indices[1].unwrap() - 1],
+                    normal: self.normals[indices[2].unwrap() - 1],
                 }
             })
             .collect::<Vec<_>>();
@@ -199,20 +204,25 @@ impl Object<Built> {
             match marker {
                 "o" => {
                     let name = tokens.next().unwrap();
-                    println!("Parsing object `{name}`");
+                    dbg!("Parsing object `{name}`");
                     object.name(name);
                 }
-                "g" => println!("Parsing group `{}`", tokens.next().unwrap()),
-                "s" => println!(
-                    "Smooth shading would now be {}",
-                    match tokens.next().unwrap() {
-                        "1" | "on" => "on",
-                        "0" | "off" => "off",
-                        v => panic!("Unhandled smooth shading setting `{v}`"),
-                    }
-                ),
+                "g" => {
+                    dbg!("Parsing group `{}`", tokens.next().unwrap());
+                }
+                "s" => {
+                    dbg!(
+                        "Smooth shading would now be {}",
+                        match tokens.next().unwrap() {
+                            "1" | "on" => "on",
+                            "0" | "off" => "off",
+                            v => panic!("Unhandled smooth shading setting `{v}`"),
+                        }
+                    );
+                }
                 "v" => object.push_vertex(line, tokens),
                 "vn" => object.push_normal(line, tokens),
+                "vt" => object.push_uv(line, tokens),
                 "f" => object.push_face(line, tokens),
                 _ => panic!("Unhandled marker {marker}"),
             }
@@ -392,7 +402,7 @@ fn parse_coords(tokens: SplitWhitespace, line: Option<usize>) -> Vec<f32> {
         })
         .collect::<Vec<_>>();
 
-    if !(3..4).contains(&coords.len()) {
+    if !(2..4).contains(&coords.len()) {
         panic!(
             "Invalid coordinate count at line {}: {coords:?}",
             line.map(|line| line.to_string())

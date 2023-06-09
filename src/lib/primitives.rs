@@ -10,7 +10,7 @@ pub struct Vertex<const DIM: usize = 3, TYPE: Copy = f32> {
     /// XYZ normal.
     pub normal: Vector<DIM, TYPE>,
     /// UV(W) texture coordinates.
-    pub uv: Vector<DIM, TYPE>,
+    pub uv: Vector<2, TYPE>,
 }
 
 #[derive(Debug, Default)]
@@ -92,17 +92,17 @@ mod test {
             Vertex {
                 position: Vector::new(-0.5, 0., -0.5),
                 normal: Vector::new(0., 1., 0.),
-                uv: Vector::new(0., 0., 0.),
+                uv: Vector::from([0., 0.]),
             },
             Vertex {
                 position: Vector::new(0., 0., 0.5),
                 normal: Vector::new(0., 1., 0.),
-                uv: Vector::new(0.5, 1., 0.),
+                uv: Vector::from([0.5, 1.]),
             },
             Vertex {
                 position: Vector::new(0.5, 0., -0.5),
                 normal: Vector::new(0., 1., 0.),
-                uv: Vector::new(1., 0., 0.),
+                uv: Vector::from([1., 0.]),
             },
         );
 
