@@ -10,7 +10,7 @@ use std::{
 
 use super::{shader::Shader, Signature};
 
-use crate::{color::Color, image::Image, vector::Vector};
+use crate::{color::Color, image::Image, vector::Vec3};
 
 macro_rules! socket_value {
     { $($(#[$attr:meta])* $name:ident : $type:ty = $default:expr),+ $(,)? } => {
@@ -112,7 +112,7 @@ socket_value! {
     /// Image of floating-point values
     Value: Image<f32> = Image::default(),
     /// Image of [3D vectors](Vec3)
-    Vec3: Image<Vector<3, f32>> = Image::default(),
+    Vec3: Image<Vec3> = Image::default(),
     /// Image of [colors](Color)
     Color: Image<Color> = Image::default(),
 }
@@ -334,7 +334,6 @@ impl Graph<Validated> {
             .outputs
             .clone()
             .into_iter()
-            .filter(|(_name, (_ref, value))| value.is_none())
             .map(|output| {
                 let (name, (socket_ref, mut value)) = output;
 

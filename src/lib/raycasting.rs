@@ -1,19 +1,19 @@
 //! Structs required for raycasting
 
-use super::vector::Vector;
+use crate::color::Color;
 
-use crate::material::MaterialOutputBundle;
+use super::vector::Vec3;
 
 #[derive(Clone, Debug, Default)]
 /// A ray defined by its start position and direction.
 pub struct Ray {
-    start: Vector<3, f32>,
-    dir: Vector<3, f32>,
+    start: Vec3,
+    dir: Vec3,
 }
 
 impl Ray {
     /// Create a new [Ray] from a position and direction.
-    pub fn new(start: Vector<3, f32>, dir: Vector<3, f32>) -> Self {
+    pub fn new(start: Vec3, dir: Vec3) -> Self {
         Self {
             start,
             dir: dir.normalize(),
@@ -21,19 +21,19 @@ impl Ray {
     }
 
     /// Get position at `t` along ray.
-    pub fn calc(&self, t: f32) -> Vector<3, f32> {
+    pub fn calc(&self, t: f32) -> Vec3 {
         self.start + self.dir * t
     }
 
     #[inline]
     /// Get starting position
-    pub fn start(&self) -> &Vector<3, f32> {
+    pub fn start(&self) -> &Vec3 {
         &self.start
     }
 
     #[inline]
     /// Get direction
-    pub fn dir(&self) -> &Vector<3, f32> {
+    pub fn dir(&self) -> &Vec3 {
         &self.dir
     }
 }
@@ -43,12 +43,18 @@ impl Ray {
 pub struct RaycastHit {
     /// ID of the hit face of the hit object.
     pub face_index: usize,
-
     /// World-space position of the hit.
-    pub position: Vector<3, f32>,
+    pub position: Vec3,
     /// World-space direction of the normal at the hit's position.
-    pub normal: Vector<3, f32>,
+    pub normal: Vec3,
 
-    /// Material properties at the hit point
-    pub material: MaterialOutputBundle,
+    /// Color of the hit face.
+    pub color: Color,
+
+    /// Diffuse property of the hit face (k_d).
+    pub diffuse: f32,
+    /// Specular property of the hit face (k_s).
+    pub specular: f32,
+    /// Specular power property of the hit face.
+    pub specular_power: f32,
 }

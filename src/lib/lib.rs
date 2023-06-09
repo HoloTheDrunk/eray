@@ -5,16 +5,12 @@
 
 pub mod color;
 pub mod image;
-pub mod material;
 pub mod matrix;
 pub mod object;
 pub mod primitives;
 pub mod raycasting;
 pub mod shader;
 pub mod vector;
-
-const DEFAULT_DIM: usize = 3;
-type DefaultType = f32;
 
 macro_rules! states {
     {$($(#[$attr:meta])* $state:ident),+ $(,)?} => {

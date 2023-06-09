@@ -1,65 +1,44 @@
 //! 3D vector definition
 
-use super::{DefaultType, DEFAULT_DIM};
+use ::derive_more::{Add, AddAssign, Neg, Sub, SubAssign};
+use std::ops::{Div, Mul, MulAssign};
 
-use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
-
-use paste::paste;
-
-#[derive(PartialEq, Clone, Copy, Debug)]
-/// DIM-dimensional vector of TYPE values.
-pub struct Vector<const DIM: usize = DEFAULT_DIM, TYPE = DefaultType> {
-    inner: [TYPE; DIM],
-}
-
-impl<const DIM: usize, TYPE: Default + Copy> Default for Vector<DIM, TYPE> {
-    fn default() -> Self {
-        Self {
-            inner: [TYPE::default(); DIM],
-        }
-    }
-}
-
-impl<const DIM: usize, TYPE> Index<usize> for Vector<DIM, TYPE> {
-    type Output = TYPE;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.inner[index]
-    }
-}
-
-impl<const DIM: usize, TYPE> IndexMut<usize> for Vector<DIM, TYPE> {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.inner[index]
-    }
+#[derive(Add, AddAssign, Sub, SubAssign, Neg, PartialEq, Clone, Copy, Debug, Default)]
+/// A 3D vector
+pub struct Vec3 {
+    #[allow(missing_docs)]
+    pub x: f32,
+    #[allow(missing_docs)]
+    pub y: f32,
+    #[allow(missing_docs)]
+    pub z: f32,
 }
 
 macro_rules! into_primitive_array {
     ($($target:ty),+ $(,)?) => {
         $(
-            impl<const DIM: usize> From<Vector<DIM, $target>> for [$target; DIM] {
-                fn from(value: Vector<DIM, $target>) -> Self {
-                    value.inner
+            impl From<Vec3> for [$target; 3] {
+                fn from(value: Vec3) -> Self {
+                    [value.x as $target, value.y as $target, value.z as $target]
                 }
             }
 
-            impl<const DIM: usize> From<[$target; DIM]> for Vector<DIM, $target> {
-                fn from(value: [$target; DIM]) -> Self {
+            impl From<[$target; 3]> for Vec3 {
+                fn from(value: [$target; 3]) -> Self {
                     Self {
-                        inner: value
+                        x: value[0] as f32,
+                        y: value[1] as f32,
+                        z: value[2] as f32,
                     }
                 }
             }
 
-            impl<const DIM: usize> From<&[$target]> for Vector<DIM, $target> {
+            impl From<&[$target]> for Vec3 {
                 fn from(value: &[$target]) -> Self {
-                    let mut res = [<$target as Default>::default(); DIM];
-                    for i in 0..DIM {
-                        res[i] = value[i];
-                    }
-
                     Self {
-                        inner: res
+                        x: value[0] as f32,
+                        y: value[1] as f32,
+                        z: value[2] as f32,
                     }
                 }
             }
@@ -69,143 +48,106 @@ macro_rules! into_primitive_array {
 
 into_primitive_array!(i32, i64, f32, f64);
 
-macro_rules! impl_vec_vec_op {
-    ($trait:ident, $function:ident, $($op:tt)+) => {
-        paste! {
-            impl<const DIM: usize, TYPE: Copy + [<$trait Assign>]<TYPE>> [<$trait Assign>]<Self> for Vector<DIM, TYPE> {
-                fn [<$function _assign>](&mut self, rhs: Self) {
-                    for (l, r) in self.inner.iter_mut().zip(rhs.inner.iter()) {
-                        *l $($op)+ *r;
-                    }
-                }
-            }
-
-            impl<const DIM: usize, TYPE: Copy + [<$trait Assign>]<TYPE>> $trait<Self> for Vector<DIM, TYPE> {
-                type Output = Self;
-
-                fn $function(mut self, rhs: Self) -> Self::Output {
-                    self $($op)+ rhs;
-                    self
-                }
-            }
-        }
+impl Vec3 {
+    /// Create a new vector from coordinates.
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
+        Vec3 { x, y, z }
     }
-}
 
-impl_vec_vec_op! (Add, add, +=);
-impl_vec_vec_op! (Sub, sub, -=);
-
-macro_rules! impl_vec_type_op {
-    ($trait:ident, $function:ident, $($op:tt)+) => {
-        paste! {
-            impl<const DIM: usize, TYPE: Copy + [<$trait Assign>]<TYPE>> [<$trait Assign>]<TYPE> for Vector<DIM, TYPE> {
-                fn [<$function _assign>](&mut self, rhs: TYPE) {
-                    for v in self.inner.as_mut_slice() {
-                        *v $($op)+ rhs;
-                    }
-                }
-            }
-
-            impl<const DIM: usize, TYPE: Copy + [<$trait Assign>]<TYPE>> $trait<TYPE> for Vector<DIM, TYPE> {
-                type Output = Self;
-
-                fn $function(mut self, rhs: TYPE) -> Self::Output {
-                    self $($op)+ rhs;
-                    self
-                }
-            }
-        }
+    #[inline]
+    /// Get squared length of the vector, slightly faster than [Vec3::len].
+    pub fn len_sq(&self) -> f32 {
+        self.dot_product(self)
     }
-}
 
-impl_vec_type_op! (Add, add, +=);
-impl_vec_type_op! (Sub, sub, -=);
-impl_vec_type_op! (Mul, mul, *=);
-impl_vec_type_op! (Div, div, /=);
-
-impl<TYPE> Vector<3, TYPE> {
-    /// Create a new 3D vector from values.
-    pub fn new<T: Into<TYPE>>(x: T, y: T, z: T) -> Self {
-        Self {
-            inner: [x.into(), y.into(), z.into()],
-        }
-    }
-}
-
-impl<
-        const DIM: usize,
-        TYPE: Default
-            + Copy
-            + Add<Output = TYPE>
-            + Mul<Output = TYPE>
-            + Div<Output = TYPE>
-            + DivAssign<TYPE>
-            + From<f32>
-            + Into<f32>,
-    > Vector<DIM, TYPE>
-{
     #[inline]
     /// Get length of the vector.
     pub fn len(&self) -> f32 {
-        self.len_sq().into().sqrt()
+        self.len_sq().sqrt()
     }
 
     #[inline]
     /// Get normalized vector pointing in the same direction.
-    pub fn normalize(&self) -> Self {
-        *self / self.len().into()
+    pub fn normalize(&self) -> Vec3 {
+        *self / self.len()
+    }
+
+    /// Perform dot product with `other`.
+    pub fn dot_product(&self, other: &Vec3) -> f32 {
+        macro_rules! dot_product {
+            ($l:ident, $r:ident | $($field:ident),*) => {
+                0. $( + $l.$field * $r.$field )*
+            };
+        }
+
+        dot_product!(self, other | x, y, z)
+        // self.x * other.x + self.y * other.y + self.z * other.z
+    }
+
+    /// Perform cross product with `other`.
+    pub fn cross_product(&self, other: &Vec3) -> Vec3 {
+        Vec3 {
+            x: other.z * self.y - self.z * other.y,
+            y: other.x * self.z - self.x * other.z,
+            z: other.y * self.x - self.y * other.x,
+        }
     }
 
     /// Get angle to `other` vector.
-    pub fn angle_to(&self, other: &Self) -> f32 {
-        let dot = self.dot_product(other).into();
+    pub fn angle_to(&self, other: &Vec3) -> f32 {
+        let dot = self.dot_product(other);
         let res = dot / (self.len() * other.len());
         res.acos()
     }
+}
 
-    #[inline]
-    /// Performs `above / self` element-wise.
-    pub fn div_under(mut self, above: TYPE) -> Self {
-        for v in self.inner.iter_mut() {
-            *v = above / *v;
-        }
+impl Mul<f32> for Vec3 {
+    type Output = Self;
+
+    fn mul(mut self, rhs: f32) -> Self::Output {
+        self.x *= rhs;
+        self.y *= rhs;
+        self.z *= rhs;
 
         self
     }
 }
 
-impl<const DIM: usize, TYPE: Copy + Default + Add<Output = TYPE> + Mul<Output = TYPE>>
-    Vector<DIM, TYPE>
-{
-    #[inline]
-    /// Get squared length of the vector, slightly faster than [Vec3::len].
-    pub fn len_sq(&self) -> TYPE {
-        self.dot_product(self)
-    }
-
-    /// Perform dot product with `other`.
-    pub fn dot_product(&self, other: &Self) -> TYPE {
-        self.inner
-            .iter()
-            .zip(other.inner.iter())
-            .fold(TYPE::default(), |acc, cur| acc + *cur.0 * *cur.1)
+impl MulAssign<f32> for Vec3 {
+    fn mul_assign(&mut self, rhs: f32) {
+        self.x *= rhs;
+        self.y *= rhs;
+        self.z *= rhs;
     }
 }
 
-impl<TYPE: Copy + Mul<Output = TYPE> + Sub<TYPE, Output = TYPE>> Vector<3, TYPE> {
-    /// Perform cross product with `other`.
-    pub fn cross_product(&self, other: &Self) -> Self {
-        Vector {
-            inner: [
-                other.inner[2] * self.inner[1] - self.inner[2] * other.inner[1],
-                other.inner[0] * self.inner[2] - self.inner[0] * other.inner[2],
-                other.inner[1] * self.inner[0] - self.inner[1] * other.inner[0],
-            ],
-        }
+impl Div<f32> for Vec3 {
+    type Output = Self;
+
+    fn div(self, rhs: f32) -> Self::Output {
+        self * (1. / rhs)
     }
 }
 
-impl<const DIM: usize, TYPE: Default> Vector<DIM, TYPE> {}
+impl Div<Vec3> for f32 {
+    type Output = Vec3;
+
+    fn div(self, mut rhs: Vec3) -> Self::Output {
+        rhs.x = self / rhs.x;
+        rhs.y = self / rhs.y;
+        rhs.z = self / rhs.z;
+
+        rhs
+    }
+}
+
+impl Mul for Vec3 {
+    type Output = f32;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        self.dot_product(&rhs)
+    }
+}
 
 #[cfg(test)]
 mod test {
@@ -213,20 +155,14 @@ mod test {
 
     use super::*;
 
-    fn get_vecs() -> (Vector, Vector) {
-        (Vector::new(1., 2., -3.), Vector::new(-1.5, 2.3, 0.1))
+    fn get_vecs() -> (Vec3, Vec3) {
+        (Vec3::new(1., 2., -3.), Vec3::new(-1.5, 2.3, 0.1))
     }
 
     #[test]
-    /// This will break if generics are very poorly defined.
-    fn generics() {
-        Vector::<3, f32>::new(1., 2., 3.).normalize();
-    }
-
-    #[test]
-    fn dot_product() {
+    fn test_dot_product() {
         let (first, second) = get_vecs();
-        let got = first.dot_product(&second);
+        let got = first * second;
         let expected = 2.8;
         assert_float_eq!(
             expected,
@@ -237,11 +173,11 @@ mod test {
     }
 
     #[test]
-    fn cross_product() {
+    fn test_cross_product() {
         let (first, second) = get_vecs();
 
-        let got: Vector<3, f32> = first.cross_product(&second);
-        let expected: Vector<3, f32> = Vector::new(7.1, 4.4, 5.3);
+        let got = first.cross_product(&second);
+        let expected = Vec3::new(7.1, 4.4, 5.3);
         let comp = (got - expected).len_sq();
 
         assert!(
@@ -251,7 +187,7 @@ mod test {
     }
 
     #[test]
-    fn angle() {
+    fn test_angle() {
         let (first, second) = get_vecs();
 
         let got = first.angle_to(&second);
