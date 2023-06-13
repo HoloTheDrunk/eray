@@ -3,6 +3,7 @@
 //! Library used by the eray software. Provides a simple shader node graph and basic functionality
 //! useful for writing rendering applications.
 
+pub mod camera;
 pub mod color;
 pub mod image;
 pub mod light;
