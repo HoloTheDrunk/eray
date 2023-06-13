@@ -3,6 +3,7 @@
 //! Library used by the eray software. Provides a simple shader node graph and basic functionality
 //! useful for writing rendering applications.
 
+// TODO: package all of those into their own sub-modules because jesus christ.
 pub mod camera;
 pub mod color;
 pub mod image;
@@ -15,6 +16,8 @@ pub mod raycasting;
 pub mod scene;
 pub mod shader;
 pub mod vector;
+
+pub mod engine;
 
 const DEFAULT_DIM: usize = 3;
 type DefaultType = f32;
