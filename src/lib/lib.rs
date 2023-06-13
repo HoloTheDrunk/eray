@@ -37,3 +37,11 @@ states! {
     /// Object has been converted to an [OpenGLObject] and cannot be converted again.
     GLConsumed
 }
+
+/// Everything in the eray library.
+pub mod prelude {
+    pub use super::{
+        camera::*, color::*, image::*, light::*, material::*, matrix::*, object::*, primitives::*,
+        raycasting::*, scene::*, shader::*, vector::*,
+    };
+}
