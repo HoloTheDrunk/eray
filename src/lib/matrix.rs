@@ -4,14 +4,14 @@ use std::ops::Mul;
 
 use crate::vector::Vector;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 /// 4x4 matrix
 pub struct Mat4 {
     /// Arrays storing the matrix data
     pub inner: [[f32; 4]; 4],
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 /// 3D transformation representation
 pub struct Transform {
     inner: Mat4,

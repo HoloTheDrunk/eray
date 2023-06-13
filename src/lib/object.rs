@@ -204,14 +204,14 @@ impl Object<Built> {
             match marker {
                 "o" => {
                     let name = tokens.next().unwrap();
-                    dbg!("Parsing object `{name}`");
+                    println!("Parsing object `{name}`");
                     object.name(name);
                 }
                 "g" => {
-                    dbg!("Parsing group `{}`", tokens.next().unwrap());
+                    println!("Parsing group `{}`", tokens.next().unwrap());
                 }
                 "s" => {
-                    dbg!(
+                    println!(
                         "Smooth shading would now be {}",
                         match tokens.next().unwrap() {
                             "1" | "on" => "on",

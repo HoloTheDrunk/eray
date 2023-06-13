@@ -5,11 +5,13 @@
 
 pub mod color;
 pub mod image;
+pub mod light;
 pub mod material;
 pub mod matrix;
 pub mod object;
 pub mod primitives;
 pub mod raycasting;
+pub mod scene;
 pub mod shader;
 pub mod vector;
 

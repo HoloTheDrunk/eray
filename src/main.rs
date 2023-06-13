@@ -1,5 +1,3 @@
-mod raytracer;
-
 use std::path::Path;
 
 use eray::{

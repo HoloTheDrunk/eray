@@ -39,7 +39,6 @@ impl Triangle {
     ///
     /// Returns a world-space position, world-space normalized surface normal vector and a barycentric position.
     pub fn intersects(&self, ray: &Ray) -> Option<(Vector, Vector, Vector)> {
-        // TODO: Check for ray / normal match to do backface culling
         let [a, b, c] = [self.a.position, self.b.position, self.c.position];
 
         let e1 = b - a;
