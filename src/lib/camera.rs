@@ -3,6 +3,16 @@
 use crate::{raycasting::Ray, vector::Vector};
 
 #[derive(Clone, Debug)]
+/// Field of view as angles in radians.
+pub struct Fov(pub f32, pub f32);
+
+impl Fov {
+    fn ratio(&self) -> f32 {
+        self.0 / self.1
+    }
+}
+
+#[derive(Clone, Debug)]
 /// A 3D camera.
 pub struct Camera {
     /// Position.
@@ -25,16 +35,6 @@ impl Camera {
     /// Get viewport size in pixels.
     pub fn size(&self) -> (u32, u32) {
         (self.width, (self.width as f32 / self.fov.ratio()) as u32)
-    }
-}
-
-#[derive(Clone, Debug)]
-/// Field of view as angles in radians.
-pub struct Fov(pub f32, pub f32);
-
-impl Fov {
-    fn ratio(&self) -> f32 {
-        self.0 / self.1
     }
 }
 

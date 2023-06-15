@@ -1,11 +1,6 @@
 use std::path::Path;
 
-use eray::{
-    object::Object,
-    primitives::*,
-    raycasting::{Ray, RaycastHit},
-    vector::Vector,
-};
+use eray::{engine::*, prelude::*};
 
 fn main() {
     println!("Hello, world!");
@@ -42,5 +37,22 @@ fn main() {
     // dbg!(test);
     // dbg!(barycentric);
 
-    let cube = Object::load_obj(Path::new("./objects/cube.obj")).unwrap();
+    // let cube = Object::load_obj(Path::new("./objects/cube.obj")).unwrap();
+    let mut engine = Engine::new((1024, 1024), 0, 0);
+    engine
+        .scene()
+        .set_camera(Camera {
+            center: Vector::new(0., 0., 5.),
+            fov: Fov(60., 60.),
+            width: 1024,
+            ..Default::default()
+        })
+        .add_light(Light {
+            transform: Transform::default(),
+            variant: LightVariant::Point,
+            color: Color::new(1., 1., 1.),
+            brightness: 1.,
+        })
+        .add_object(Object::load_obj(Path::new("./objects/cube.obj")).unwrap());
+    engine.render_to_path(Path::new("output.ppm")).unwrap();
 }

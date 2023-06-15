@@ -56,6 +56,7 @@ impl Material {
             diffuse: get_value(StandardMaterialOutput::Diffuse),
             specular: get_value(StandardMaterialOutput::Specular),
             specular_power: get_value(StandardMaterialOutput::SpecularPower),
+            reflection: get_value(StandardMaterialOutput::Reflection),
         }
     }
 }
@@ -66,6 +67,7 @@ pub enum StandardMaterialOutput {
     Diffuse,
     Specular,
     SpecularPower,
+    Reflection,
 }
 
 #[derive(Debug, Clone)]
@@ -78,4 +80,6 @@ pub struct MaterialOutputBundle {
     pub specular: Option<f32>,
     /// Specular power value at point.
     pub specular_power: Option<f32>,
+    /// How much light is reflected.
+    pub reflection: Option<f32>,
 }

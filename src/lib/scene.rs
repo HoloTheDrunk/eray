@@ -21,12 +21,19 @@ impl<State> Debug for Scene<State> {
         f.debug_struct("Scene")
             .field("objects", &self.objects.len())
             .field("lights", &self.lights.len())
-            // .field("camera", &self.camera)
+            .field("camera", &self.camera)
             .finish()
     }
 }
 
 impl Scene<Building> {
+    pub fn new(camera: Camera) -> Self {
+        Self {
+            camera,
+            ..Default::default()
+        }
+    }
+
     /// Adss an object to the scene.
     pub fn add_object(&mut self, object: Object<Built>) -> &mut Self {
         self.objects.push(object);
@@ -36,6 +43,12 @@ impl Scene<Building> {
     /// Adss a light to the scene.
     pub fn add_light(&mut self, light: Light) -> &mut Self {
         self.lights.push(light);
+        self
+    }
+
+    /// Sets the scene camera to the one passed as argument.
+    pub fn set_camera(&mut self, camera: Camera) -> &mut Self {
+        self.camera = camera;
         self
     }
 }

@@ -11,16 +11,6 @@ pub struct Mat4 {
     pub inner: [[f32; 4]; 4],
 }
 
-#[derive(Clone, Debug, Default)]
-/// 3D transformation representation
-pub struct Transform {
-    inner: Mat4,
-
-    translation: Vector<3, f32>,
-    scale: Vector<3, f32>,
-    rotation: Vector<3, f32>,
-}
-
 impl Mul<Mat4> for Mat4 {
     type Output = Mat4;
 
@@ -39,7 +29,35 @@ impl Mul<Mat4> for Mat4 {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+/// 3D transformation representation
+pub struct Transform {
+    inner: Mat4,
+
+    translation: Vector<3, f32>,
+    rotation: Vector<3, f32>,
+    scale: Vector<3, f32>,
+}
+
 impl Transform {
+    #[inline]
+    /// Inlined O(1) accessor.
+    pub fn translation(&self) -> Vector<3, f32> {
+        self.translation
+    }
+
+    #[inline]
+    /// Inlined O(1) accessor.
+    pub fn rotation(&self) -> Vector<3, f32> {
+        self.rotation
+    }
+
+    #[inline]
+    /// Inlined O(1) accessor.
+    pub fn scale(&self) -> Vector<3, f32> {
+        self.scale
+    }
+
     fn new_translation(delta: Vector<3, f32>) -> Mat4 {
         let mut res = Mat4::default();
 
@@ -83,21 +101,21 @@ impl Transform {
     }
 
     /// Add a translation of `delta` to the [Transform]
-    pub fn translate(mut self, delta: Vector<3, f32>) -> Self {
+    pub fn apply_translation(mut self, delta: Vector<3, f32>) -> Self {
         self.translation += delta;
         self.inner = self.inner * Transform::new_translation(delta);
         self
     }
 
     /// Scale by `delta`
-    pub fn scale(mut self, delta: Vector<3, f32>) -> Self {
+    pub fn apply_scale(mut self, delta: Vector<3, f32>) -> Self {
         self.scale += delta;
         self.inner = self.inner * Transform::new_scaling(delta);
         self
     }
 
     /// Rotate by `angle` around `axis`
-    pub fn rotate(mut self, axis: Vector<3, f32>, angle: f32) -> Self {
+    pub fn apply_rotation(mut self, axis: Vector<3, f32>, angle: f32) -> Self {
         self.rotation += axis * angle;
         self.inner = self.inner * Transform::new_rotation(axis.normalize(), angle);
         self

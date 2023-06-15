@@ -45,13 +45,13 @@ impl Color {
     }
 }
 
-impl Mul<f64> for Color {
+impl Mul<f32> for Color {
     type Output = Self;
 
-    fn mul(mut self, rhs: f64) -> Self::Output {
-        self.r = (self.r as f64 * rhs) as f32;
-        self.g = (self.g as f64 * rhs) as f32;
-        self.b = (self.b as f64 * rhs) as f32;
+    fn mul(mut self, rhs: f32) -> Self::Output {
+        self.r = self.r * rhs;
+        self.g = self.g * rhs;
+        self.b = self.b * rhs;
 
         self
     }

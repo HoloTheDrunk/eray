@@ -12,10 +12,10 @@ pub struct Light {
     /// Light color.
     pub color: Color,
     /// Light brightness level.
-    pub brightness: f64,
+    pub brightness: f32,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 /// Different types of lights that behave differently.
 pub enum LightVariant {
     /// Point light that shines in all directions.
