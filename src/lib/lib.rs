@@ -45,6 +45,6 @@ states! {
 pub mod prelude {
     pub use super::{
         camera::*, color::*, image::*, light::*, material::*, matrix::*, object::*, primitives::*,
-        raycasting::*, scene::*, shader::*, vector::*,
+        raycasting::*, scene::*, vector::*,
     };
 }

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::{
     color::Color,
-    shader::graph::{Graph, Name, SocketValue, Validated},
+    shader::graph::{Error, Graph, Name, SocketValue, Validated},
 };
 
 #[derive(Debug, Clone, Default)]
@@ -28,15 +28,30 @@ impl From<(Graph<Validated>, HashMap<StandardMaterialOutput, Name>)> for Materia
 }
 
 impl Material {
+    /// Recomputes the inner graph if needed.
+    pub fn update(&mut self) -> Result<(), Error> {
+        if self.recompute {
+            self.graph.run()?;
+            self.recompute = false;
+        }
+
+        Ok(())
+    }
+
     /// Retrieve all standard information about a pixel in the shader graph's result.
-    pub fn get(&self, x: u32, y: u32) -> MaterialOutputBundle {
+    pub fn get(&self, x: f32, y: f32) -> MaterialOutputBundle {
         let get_value = |output: StandardMaterialOutput| {
             self.selected_outputs
                 .get(&output)
                 .map(|name| self.graph.outputs.get(name))
                 .flatten()
                 .map(|(_ref, value)| match value {
-                    SocketValue::Value(image) => image.as_ref().map(|image| image.mod_get(x, y)),
+                    SocketValue::Value(image) => image.as_ref().map(|image| {
+                        image.mod_get(
+                            (x * image.width as f32) as u32,
+                            (y * image.height as f32) as u32,
+                        )
+                    }),
                     _ => None,
                 })
                 .flatten()
@@ -46,10 +61,18 @@ impl Material {
             color: self
                 .selected_outputs
                 .get(&StandardMaterialOutput::Color)
-                .map(|name| self.graph.outputs.get(name))
+                .map(|name| {
+                    let res = self.graph.outputs.get(name);
+                    res
+                })
                 .flatten()
                 .map(|(_ref, value)| match value {
-                    SocketValue::Color(image) => image.as_ref().map(|image| image.mod_get(x, y)),
+                    SocketValue::Color(image) => image.as_ref().map(|image| {
+                        image.mod_get(
+                            (x * image.width as f32) as u32,
+                            (y * image.height as f32) as u32,
+                        )
+                    }),
                     _ => None,
                 })
                 .flatten(),
@@ -61,7 +84,9 @@ impl Material {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+/// Standardized shade graph output types.
 pub enum StandardMaterialOutput {
     Color,
     Diffuse,
@@ -71,6 +96,7 @@ pub enum StandardMaterialOutput {
 }
 
 #[derive(Debug, Clone)]
+/// Standardized shader graph outputs at a given position.
 pub struct MaterialOutputBundle {
     /// [Color] at point.
     pub color: Option<Color>,

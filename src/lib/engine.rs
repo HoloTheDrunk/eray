@@ -152,16 +152,16 @@ impl Engine<Building> {
 
                     let diffusion = color
                         * light.color
-                        * material.diffuse.unwrap_or_default()
+                        * material.diffuse.unwrap_or(0.5)
                         * prod
                         * light.brightness
                         * falloff;
 
-                    let specular_power = material.specular_power.unwrap_or_default();
+                    let specular_power = material.specular_power.unwrap_or(1.);
                     let specular = {
                         // w = v - 2 * (v x n) * n
                         let reflected = *ray.dir() - normal * 2. * (ray.dir().dot_product(&normal));
-                        let res = (material.specular.unwrap_or_default()
+                        let res = (material.specular.unwrap_or(0.5)
                             * light.brightness
                             * reflected
                                 .normalize()
@@ -178,7 +178,7 @@ impl Engine<Building> {
                     lighting.push(result);
                 }
 
-                let reflection = material.reflection.unwrap_or_default();
+                let reflection = material.reflection.unwrap_or(0.);
                 if bounce_depth < self.bounces && reflection != 0. {
                     let start = position + normal * 0.1;
                     let dir = *ray.dir() - normal * 2. * (ray.dir().dot_product(&normal));
@@ -194,6 +194,18 @@ impl Engine<Building> {
             // if let Some(ref ambient) = self.scene.ambient {
             //     lighting.push(ambient.color * props.diffusion * ambient.brightness);
             // }
+            for ambient in self
+                .scene
+                .lights
+                .iter()
+                .filter(|light| light.variant == LightVariant::Ambient)
+            {
+                lighting.push(
+                    ambient.color.min(&color)
+                        * material.diffuse.unwrap_or(0.5)
+                        * ambient.brightness,
+                );
+            }
         }
 
         if closest.is_none() {

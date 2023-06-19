@@ -67,11 +67,11 @@ impl Object<Built> {
                     position,
                     normal,
                     material: {
-                        let uv = face.a.uv * barycentric[2]
-                            + face.b.uv * barycentric[0]
-                            + face.c.uv * barycentric[1];
+                        let uv = face.a.uv * barycentric[0]
+                            + face.b.uv * barycentric[1]
+                            + face.c.uv * barycentric[2];
 
-                        self.material.get(uv[0] as u32, uv[1] as u32)
+                        self.material.get(uv[0], uv[1])
                     },
                 });
             }
@@ -97,6 +97,51 @@ impl Default for Object<Building> {
 }
 
 impl Object<Building> {
+    /// Load an object from a Wavefront .obj file.
+    pub fn load_obj(path: &Path) -> std::io::Result<Self> {
+        let content = std::fs::read_to_string(path)?;
+
+        // let mut object = Self::default();
+        let mut object = Object::<Building>::default();
+
+        for (line, line_content) in content.lines().enumerate() {
+            if line_content.is_empty() || line_content.chars().next().unwrap_or('#') == '#' {
+                continue;
+            }
+
+            let mut tokens = line_content.split_whitespace();
+            let marker = tokens.next().unwrap();
+
+            match marker {
+                "o" => {
+                    let name = tokens.next().unwrap();
+                    println!("Parsing object `{name}`");
+                    object.name(name);
+                }
+                "g" => {
+                    println!("Parsing group `{}`", tokens.next().unwrap());
+                }
+                "s" => {
+                    println!(
+                        "Smooth shading would now be {}",
+                        match tokens.next().unwrap() {
+                            "1" | "on" => "on",
+                            "0" | "off" => "off",
+                            v => panic!("Unhandled smooth shading setting `{v}`"),
+                        }
+                    );
+                }
+                "v" => object.push_vertex(line, tokens),
+                "vn" => object.push_normal(line, tokens),
+                "vt" => object.push_uv(line, tokens),
+                "f" => object.push_face(line, tokens),
+                _ => panic!("Unhandled marker {marker}"),
+            }
+        }
+
+        Ok(object)
+    }
+
     fn push_vertex(&mut self, line: usize, tokens: SplitWhitespace) {
         let coords = parse_coords(tokens, Some(line));
         self.vertices.push(coords[0..=2].into());
@@ -186,51 +231,6 @@ impl Object<Building> {
 }
 
 impl Object<Built> {
-    /// Load an object from a Wavefront .obj file.
-    pub fn load_obj(path: &Path) -> std::io::Result<Self> {
-        let content = std::fs::read_to_string(path)?;
-
-        // let mut object = Self::default();
-        let mut object = Object::<Building>::default();
-
-        for (line, line_content) in content.lines().enumerate() {
-            if line_content.is_empty() || line_content.chars().next().unwrap_or('#') == '#' {
-                continue;
-            }
-
-            let mut tokens = line_content.split_whitespace();
-            let marker = tokens.next().unwrap();
-
-            match marker {
-                "o" => {
-                    let name = tokens.next().unwrap();
-                    println!("Parsing object `{name}`");
-                    object.name(name);
-                }
-                "g" => {
-                    println!("Parsing group `{}`", tokens.next().unwrap());
-                }
-                "s" => {
-                    println!(
-                        "Smooth shading would now be {}",
-                        match tokens.next().unwrap() {
-                            "1" | "on" => "on",
-                            "0" | "off" => "off",
-                            v => panic!("Unhandled smooth shading setting `{v}`"),
-                        }
-                    );
-                }
-                "v" => object.push_vertex(line, tokens),
-                "vn" => object.push_normal(line, tokens),
-                "vt" => object.push_uv(line, tokens),
-                "f" => object.push_face(line, tokens),
-                _ => panic!("Unhandled marker {marker}"),
-            }
-        }
-
-        Ok(object.build().unwrap())
-    }
-
     /// Convert into an [OpenGLObject] and mark as consumed.
     pub fn to_opengl(self) -> (Object<GLConsumed>, OpenGLObject) {
         let vbos = [&self.vertices, &self.normals]

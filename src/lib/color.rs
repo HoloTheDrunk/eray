@@ -10,7 +10,7 @@ use ::derive_more::{Add, AddAssign};
 use crate::vector::Vector;
 
 #[derive(Clone, Copy, Default, Debug, Add, AddAssign, PartialEq)]
-/// RGB color data type
+/// RGB color data type (normalized values are in the 0..=1 range)
 pub struct Color {
     /// Red value
     pub r: f32,
@@ -43,15 +43,24 @@ impl Color {
             b: self.b.clamp(0., 1.),
         }
     }
+
+    /// Equivalent to subtractive synthesis between two colors.
+    pub fn min(&self, other: &Color) -> Self {
+        Self {
+            r: self.r.min(other.r),
+            g: self.g.min(other.g),
+            b: self.b.min(other.b),
+        }
+    }
 }
 
 impl Mul<f32> for Color {
     type Output = Self;
 
     fn mul(mut self, rhs: f32) -> Self::Output {
-        self.r = self.r * rhs;
-        self.g = self.g * rhs;
-        self.b = self.b * rhs;
+        self.r *= rhs;
+        self.g *= rhs;
+        self.b *= rhs;
 
         self
     }

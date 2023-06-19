@@ -357,7 +357,10 @@ impl Graph<Validated> {
                             .unwrap()
                             .outputs()
                             .get(&name)
-                            .unwrap())
+                            .expect(
+                                format!("Output `{}` not found for node `{}`.", name.0, node_id.0)
+                                    .as_ref(),
+                            ))
                         .clone();
                     }
                     SocketRef::Graph(name) => value = self.inputs.get(&name).unwrap().clone(),
@@ -596,17 +599,26 @@ impl<State> Node<State> {
 
 #[macro_export]
 /// Instantiate a node concisely
+///
 /// # Example
+///
 /// ```
 /// node! {
 ///     inputs:
-///         "value": ssref!(graph "iFac"),
+///         "value": (ssref!(graph "iFac"), SocketType::Number.into()),
 ///     outputs:
 ///         "value": SocketValue::Number(None);
-///     |_inputs, _outputs| ()
+///     |inputs, outputs| {
+///         get_sv!( input | inputs  . "value" : Number > in_value);
+///         get_sv!(output | outputs . "value" : Number > out_value);
+///
+///         *out_value.get_or_insert(0.) = in_value.unwrap_or(0.);
+///
+///         Ok(())
+///     }
 /// }
 /// ```
-/// The shader is optional and will be defaulted if empty.
+/// The shader closure is optional and will be defaulted to a noop if empty.
 ///
 /// See [Shader::new] for an example function.
 macro_rules! node {
