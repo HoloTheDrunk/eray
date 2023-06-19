@@ -103,6 +103,13 @@ where
 
 #[macro_export]
 /// [get](std::collections::HashMap::get)s the desired input/output field with error reporting
+///
+/// # Example
+///
+/// ```
+/// get_sv!( input | inputs  . "value" : Number > in_value);
+/// get_sv!(output | outputs . "value" : Number > out_value);
+/// ```
 macro_rules! get_sv {
     (input | $hashmap:ident . $field:literal : $type:ident > $name:ident) => {
         let $name = $hashmap.get(&$field.into()).ok_or_else(|| {

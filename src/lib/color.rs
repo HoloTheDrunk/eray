@@ -7,10 +7,10 @@ use std::{
 
 use ::derive_more::{Add, AddAssign};
 
-use crate::vector::Vec3;
+use crate::vector::Vector;
 
 #[derive(Clone, Copy, Default, Debug, Add, AddAssign, PartialEq)]
-/// RGB color data type
+/// RGB color data type (normalized values are in the 0..=1 range)
 pub struct Color {
     /// Red value
     pub r: f32,
@@ -43,15 +43,24 @@ impl Color {
             b: self.b.clamp(0., 1.),
         }
     }
+
+    /// Equivalent to subtractive synthesis between two colors.
+    pub fn min(&self, other: &Color) -> Self {
+        Self {
+            r: self.r.min(other.r),
+            g: self.g.min(other.g),
+            b: self.b.min(other.b),
+        }
+    }
 }
 
-impl Mul<f64> for Color {
+impl Mul<f32> for Color {
     type Output = Self;
 
-    fn mul(mut self, rhs: f64) -> Self::Output {
-        self.r = (self.r as f64 * rhs) as f32;
-        self.g = (self.g as f64 * rhs) as f32;
-        self.b = (self.b as f64 * rhs) as f32;
+    fn mul(mut self, rhs: f32) -> Self::Output {
+        self.r *= rhs;
+        self.g *= rhs;
+        self.b *= rhs;
 
         self
     }
@@ -87,9 +96,9 @@ impl Div<f32> for Color {
     }
 }
 
-impl From<Vec3> for Color {
-    fn from(value: Vec3) -> Self {
-        Color::new(value.x, value.y, value.z)
+impl<T: Copy + Into<f32>> From<Vector<3, T>> for Color {
+    fn from(value: Vector<3, T>) -> Self {
+        Color::new(value[0].into(), value[1].into(), value[2].into())
     }
 }
 
