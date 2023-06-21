@@ -10,6 +10,8 @@
 //! Output:
 //! - color: Color
 
+use crate::handle_missing_socket_values;
+
 use super::{GraphResult, MaterialResult, NodeResult};
 
 use eray::{
@@ -80,37 +82,18 @@ pub fn node() -> NodeResult {
 
             get_sv!(output | outputs . "color": Color > out);
 
-            if let (Some(width), Some(height), Some(red), Some(green), Some(blue)) = (width, height, red, green, blue) {
-                let mut res = Image::new(*width as u32, *height as u32, Color::new(0., 0., 0.));
+            handle_missing_socket_values![width, height, red, green, blue];
 
-                for y in 0..res.height {
-                    for x in 0..res.width {
-                        let index = (y * res.width + x) as usize;
-                        let value = Color::new(red.pixels[index], green.pixels[index], blue.pixels[index]);
-                        res.pixels[index] = value;
-                    }
+            let mut res = Image::new(*width as u32, *height as u32, Color::new(0., 0., 0.));
+
+            for y in 0..res.height {
+                for x in 0..res.width {
+                    let index = (y * res.width + x) as usize;
+                    let value = Color::new(red.pixels[index], green.pixels[index], blue.pixels[index]);
+                    res.pixels[index] = value;
                 }
-                out.replace(res);
-            } else {
-                // TODO: Create utility function for this because wtf
-                return Err(crate::shader::shader::Error::MissingMany(
-                    Side::Input,
-                    vec![
-                        (width, "width"),
-                        (height, "height"),
-                    ]
-                        .into_iter()
-                        .filter_map(|(opt, name)| opt.is_none().then(|| name.into()))
-                        .chain(vec![
-                            (red, "red"),
-                            (green, "green"),
-                            (blue, "blue")
-                        ]
-                            .into_iter()
-                            .filter_map(|(opt, name)| opt.is_none().then(|| name.into())))
-                        .collect()
-                ));
             }
+            out.replace(res);
 
             Ok(())
         }

@@ -11,6 +11,8 @@
 //! Output:
 //! - value: Value
 
+use crate::handle_missing_socket_values;
+
 use super::{GraphResult, MaterialResult, NodeResult};
 
 use eray::{
@@ -26,6 +28,8 @@ use eray::{
 
 use map_macro::hash_map;
 
+const DEFAULT_FACTOR: f32 = 1.;
+
 pub fn material() -> MaterialResult {
     Ok(Material::from((
         shader::graph::graph! {
@@ -35,8 +39,8 @@ pub fn material() -> MaterialResult {
                 "height": SocketType::Number.into(),
 
                 // Optional
-                "x_fac": SocketValue::Number(Some(1.)),
-                "y_fac": SocketValue::Number(Some(1.)),
+                "x_fac": SocketValue::Number(Some(DEFAULT_FACTOR)),
+                "y_fac": SocketValue::Number(Some(DEFAULT_FACTOR)),
             nodes:
                 "inner": {
                     let map = hash_map!{
@@ -77,8 +81,8 @@ pub fn graph() -> GraphResult {
             "height": SocketType::Number.into(),
 
             // Optional
-            "x_fac": SocketValue::Number(Some(1.)),
-            "y_fac": SocketValue::Number(Some(1.)),
+            "x_fac": SocketValue::Number(Some(DEFAULT_FACTOR)),
+            "y_fac": SocketValue::Number(Some(DEFAULT_FACTOR)),
         nodes:
             "wave": {
                 let mut node = node()?;
@@ -112,26 +116,20 @@ pub fn node() -> NodeResult {
 
             get_sv!(output | outputs . "value": Value > out);
 
-            if let (Some(width), Some(height), Some(x_fac), Some(y_fac)) = (width, height, x_fac, y_fac) {
-                let mut res = Image::new(*width as u32, *height as u32, 0.);
+            handle_missing_socket_values![width, height];
+            let x_fac = x_fac.unwrap_or(DEFAULT_FACTOR);
+            let y_fac = y_fac.unwrap_or(DEFAULT_FACTOR);
 
-                for y in 0..(res.height) {
-                    for x in 0..(res.width) {
-                        let value = ((x as f32 * x_fac + y as f32 * y_fac) / 10.).cos().abs();
-                        res.pixels[(y * res.width + x) as usize] = value;
-                    }
+            let mut res = Image::new(*width as u32, *height as u32, 0.);
+
+            for y in 0..(res.height) {
+                for x in 0..(res.width) {
+                    let value = ((x as f32 * x_fac + y as f32 * y_fac) / 10.).cos().abs();
+                    res.pixels[(y * res.width + x) as usize] = value;
                 }
-
-                out.replace(res);
-            } else {
-                return Err(crate::shader::shader::Error::MissingMany(
-                    Side::Input,
-                    vec![(width, "width"), (height, "height"), (x_fac, "x_fac"), (y_fac, "y_fac")]
-                        .into_iter()
-                        .filter_map(|(opt, name)| opt.is_none().then(|| name.into()))
-                        .collect()
-                ));
             }
+
+            out.replace(res);
 
             Ok(())
         }

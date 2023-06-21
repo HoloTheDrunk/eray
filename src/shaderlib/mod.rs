@@ -1,3 +1,6 @@
+mod utils;
+
+pub mod mix_color;
 pub mod rgb;
 pub mod wave;
 
@@ -6,6 +9,6 @@ use eray::{
     shader::graph::{Error, Graph, Node, Unvalidated},
 };
 
-pub(self) type GraphResult = Result<Graph<Unvalidated>, Error>;
-pub(self) type MaterialResult = Result<Material, Error>;
-pub(self) type NodeResult = Result<Node<Unvalidated>, Error>;
+type GraphResult = Result<Graph<Unvalidated>, Error>;
+type MaterialResult = Result<Material, Error>;
+type NodeResult = Result<Node<Unvalidated>, Error>;
