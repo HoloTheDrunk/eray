@@ -67,9 +67,9 @@ impl Object<Built> {
                     position,
                     normal,
                     material: {
-                        let uv = face.a.uv * barycentric[0]
-                            + face.b.uv * barycentric[1]
-                            + face.c.uv * barycentric[2];
+                        let uv = face.a.uv * barycentric[2]
+                            + face.b.uv * barycentric[0]
+                            + face.c.uv * barycentric[1];
 
                         self.material.get(uv[0], uv[1])
                     },

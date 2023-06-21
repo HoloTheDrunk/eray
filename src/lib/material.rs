@@ -4,7 +4,10 @@ use std::collections::HashMap;
 
 use crate::{
     color::Color,
-    shader::graph::{Error, Graph, Name, SocketValue, Validated},
+    shader::{
+        graph::{Error, Graph, Name, SocketValue, Validated},
+        shader::Side,
+    },
 };
 
 #[derive(Debug, Clone, Default)]
@@ -34,6 +37,18 @@ impl Material {
             self.graph.run()?;
             self.recompute = false;
         }
+
+        #[cfg(debug_assertions)]
+        self.selected_outputs
+            .get(&StandardMaterialOutput::Color)
+            .map(|name| self.graph.outputs.get(name))
+            .flatten()
+            .map(|(_ref, value)| match value {
+                SocketValue::Color(image) => image
+                    .as_ref()
+                    .map(|image| image.save_as_ppm(std::path::Path::new("color.ppm"))),
+                _ => panic!(),
+            });
 
         Ok(())
     }
@@ -81,6 +96,16 @@ impl Material {
             specular_power: get_value(StandardMaterialOutput::SpecularPower),
             reflection: get_value(StandardMaterialOutput::Reflection),
         }
+    }
+
+    /// Set the value of a graph input.
+    pub fn set_input(&mut self, name: &Name, value: SocketValue) -> Result<&mut Self, Error> {
+        self.graph
+            .inputs
+            .get_mut(name)
+            .ok_or_else(|| Error::Missing(Side::Input, name.clone()))
+            .map(|old| *old = value)
+            .map(|_| self)
     }
 }
 

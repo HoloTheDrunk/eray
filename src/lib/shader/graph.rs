@@ -8,7 +8,10 @@ use std::{
     str::FromStr,
 };
 
-use super::{shader::Shader, Signature};
+use super::{
+    shader::{Shader, Side},
+    Signature,
+};
 
 use crate::{color::Color, image::Image, vector::Vector};
 
@@ -204,10 +207,23 @@ states! {
 #[derive(Debug, PartialEq)]
 /// [Graph] error
 pub enum Error {
+    /// An unlinked and unset graph output is likely unintended.
+    UnlinkeUnsetdGraphOutput(Name),
     /// Detected a cycle on the node with the given [NodeId].
-    Cycle(NodeId),
+    Cycle {
+        /// Current path.
+        during: Vec<NodeId>,
+        /// Name of the socket the detected node was reached from.
+        source_socket: Name,
+        /// Name of the socket the current node was reached through.
+        target_socket: Name,
+        /// Node detected as already visited in the current path.
+        detected: NodeId,
+    },
     /// [Shader] returned with an error.
     Shader(super::shader::Error),
+    /// Trying to get/set a non-existent socket.
+    Missing(Side, Name),
 }
 
 impl From<super::shader::Error> for Error {
@@ -270,39 +286,69 @@ macro_rules! graph {
 impl Graph<Unvalidated> {
     /// Check the [unvalidated](Unvalidated) [Graph] for cycles.
     pub fn validate(self) -> Result<Graph<Validated>, Error> {
-        for output in self.outputs.iter() {
-            let mut path = Vec::<&NodeId>::new();
-            let mut next = VecDeque::new();
-            next.push_back({
-                let (_name, (Some(socket_ref), _value)) = output else {continue};
-                match socket_ref {
-                    SocketRef::Node(node_id, _name) => Some(node_id),
-                    SocketRef::Graph(_name) => None,
+        let mut path: Vec<NodeId> = Vec::new();
+        let mut visited: Vec<NodeId> = Vec::new();
+        let mut next: VecDeque<NodeId> = VecDeque::new();
+
+        // Graph outputs
+        for (output, (socket_ref, value)) in self.outputs.iter() {
+            // Check if graph output is connected to a socket or already has a value.
+            let Some(socket_ref) = socket_ref else { 
+                if value.is_none() {
+                    return Err(Error::UnlinkeUnsetdGraphOutput(output.clone()))
+                } else {
+                    continue
                 }
-            });
+            };
 
-            while let Some(Some(id)) = next.pop_front() {
-                // Check for cycle in graph
-                if path.contains(&id) {
-                    return Err(Error::Cycle(id.clone()));
-                }
+            // Check that it is connected to a node.
+            let SocketRef::Node(node_id, _socket) = socket_ref else {continue};
 
-                path.push(id);
+            // Ignore nodes connected to previously-handled graph outputs.
+            if visited.contains(node_id) {
+                continue;
+            }
 
-                self.nodes.get(id).map(|node| {
-                    let inputs = match node {
-                        Node::Graph(graph_node) => graph_node.inputs.values(),
-                        Node::Imported(imported_node) => imported_node.inputs.values(),
-                    };
+            next.push_back(node_id.clone());
 
-                    for socket_ref in inputs.map(|(opt, _type)| opt).flatten() {
-                        match socket_ref {
-                            SocketRef::Node(node_id, _name) => next.push_back(Some(node_id)),
-                            // Ignore graph inputs
-                            SocketRef::Graph(_name) => continue,
-                        }
+            // Loop through nodes recursively (using the push_front trick).
+            while let Some(current_node_id) = next.pop_front() {
+                // Check that the current node exists.
+                let Some(node) = self.nodes.get(&current_node_id) else {continue};
+
+                visited.push(current_node_id.clone());
+                path.push(current_node_id.clone());
+
+                // Used to check if the recursion should end.
+                let mut pushed_some = false;
+
+                // Node inputs
+                for (input, (socket_ref, _value)) in node.inputs() {
+                    let Some(socket_ref) = socket_ref else {continue};
+                    let SocketRef::Node(node_id, socket) = socket_ref else {continue};
+
+                    // Check for cycles, i.e. if the node was already encountered in the path.
+                    if path.contains(&node_id) {
+                        return Err(Error::Cycle {
+                            detected: node_id.clone(),
+                            target_socket: socket.clone(),
+                            source_socket: input.clone(),
+                            during: path,
+                        });
                     }
-                });
+
+                    // Ignore nodes visited from DFS starting from other graph outputs.
+                    if visited.contains(&node_id) {
+                        continue;
+                    }
+
+                    next.push_front(node_id.clone());
+                    pushed_some = true;
+                }
+
+                if !pushed_some {
+                    path.pop();
+                }
             }
         }
 
@@ -557,6 +603,27 @@ impl Node<Unvalidated> {
             Node::Imported(node) => Node::Imported(node.validate()?),
         })
     }
+
+    /// Set a node input's socket reference.
+    pub fn set_input(
+        &mut self,
+        name: &Name,
+        socket_ref: Option<SocketRef>,
+    ) -> Result<&mut Self, Error> {
+        match self {
+            Node::Graph(node) => node
+                .inputs
+                .get_mut(name)
+                .ok_or_else(|| Error::Missing(Side::Input, name.clone()))
+                .map(|(r#ref, _type)| *r#ref = socket_ref),
+            Node::Imported(node) => node
+                .inputs
+                .get_mut(name)
+                .ok_or_else(|| Error::Missing(Side::Input, name.clone()))
+                .map(|(r#ref, _type)| *r#ref = socket_ref),
+        }
+        .map(|_| self)
+    }
 }
 
 impl<State> Node<State> {
@@ -598,9 +665,9 @@ impl<State> Node<State> {
 }
 
 #[macro_export]
-/// Instantiate a node concisely
+/// Instantiate a node concisely.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
 /// node! {
@@ -620,9 +687,25 @@ impl<State> Node<State> {
 /// ```
 /// The shader closure is optional and will be defaulted to a noop if empty.
 ///
-/// See [Shader::new] for an example function.
+/// ```
+/// // With `imported` a HashMap<Name, ImportedNode<Unvalidated>>
+/// node!{
+///     import "node" from imported,
+///     inputs:
+///         "value": ssref!(graph "value"),
+/// }
+/// ```
+///
+/// ```
+/// // With `sub_graph` an ImportedNode<Unvalidated>
+/// node!{
+///     import sub_graph,
+///     inputs:
+///         "value": ssref!(graph "value"),
+/// }
+/// ```
 macro_rules! node {
-    ( import $name:literal $imported:expr $(,)?) => {
+    ( import $name:literal from $imported:expr $(,)?) => {
         crate::shader::graph::Node::Imported(
             $imported
                 .get($name)
@@ -631,7 +714,7 @@ macro_rules! node {
         )
     };
 
-    ( import $name:literal $imported:expr $(, inputs: $($input:literal : $socket_ref:expr)+)? $(,)?) => {
+    ( import $name:literal from $imported:expr $(, inputs: $($input:literal : $socket_ref:expr)+)? $(,)?) => {
         crate::shader::graph::Node::Imported({
             let mut res = $imported
                 .get($name)
@@ -660,6 +743,12 @@ macro_rules! node {
 
             res
         })
+    };
+
+    ( import graph $name:literal $graph:expr $(,)? ) => {
+        crate::shader::graph::Node::Imported(
+            crate::shader::graph::ImportedNode::from(($name, $graph))
+        )
     };
 
     { $($field:ident $(: $($o_name:literal : $value:expr),+)?),+; $shader:expr $(,)? } => {
@@ -716,36 +805,69 @@ mod test {
         .collect()
     }
 
-    #[test]
-    fn cycle_detection() {
-        let imported = setup_imports();
+    mod cycle_detection {
+        use super::*;
 
-        let validation_result = graph! {
-            inputs,
-            nodes:
-                "a": node! {
-                    import "identity" imported,
-                    inputs:
-                        "value": (ssref!(node "b" "value"), SocketType::Number),
+        #[test]
+        fn no_cycle() {
+            let imported = setup_imports();
+
+            let validation_result = graph! {
+                inputs:
+                    "value": SocketType::Number.into(),
+                nodes:
+                    "a": node! {
+                        import "identity" from imported,
+                        inputs:
+                            "value": (ssref!(graph "value"), SocketType::Number)
                 },
-                "b": node! {
-                    import "identity" imported,
-                    inputs:
-                        "value": (ssref!(node "a" "value"), SocketType::Number),
-                },
-            outputs:
-                "value": (ssref!(node "a" "value"), SocketType::Number.into()),
+                outputs:
+                    "value": (ssref!(node "a" "value"), SocketType::Number.into()),
+            }
+            .validate();
+
+            assert!(
+                validation_result.is_ok(),
+                "Expected a success, got `{validation_result:?}`"
+            );
         }
-        .validate();
 
-        let expected = Error::Cycle(NodeId("a".to_owned()));
+        #[test]
+        fn cycle() {
+            let imported = setup_imports();
 
-        assert!(
-            validation_result.is_err(),
-            "Expected an error, got `{validation_result:?}`"
-        );
+            let validation_result = graph! {
+                inputs,
+                nodes:
+                    "a": node! {
+                        import "identity" from imported,
+                        inputs:
+                            "value": (ssref!(node "b" "value"), SocketType::Number),
+                    },
+                    "b": node! {
+                        import "identity" from imported,
+                        inputs:
+                            "value": (ssref!(node "a" "value"), SocketType::Number),
+                    },
+                outputs:
+                    "value": (ssref!(node "a" "value"), SocketType::Number.into()),
+            }
+            .validate();
 
-        assert_eq!(validation_result.unwrap_err(), expected);
+            let expected = Error::Cycle {
+                detected: NodeId("a".to_owned()),
+                target_socket: "value".into(),
+                source_socket: "value".into(),
+                during: vec![NodeId("a".to_owned()), NodeId("b".to_owned())],
+            };
+
+            assert!(
+                validation_result.is_err(),
+                "Expected an error, got `{validation_result:?}`"
+            );
+
+            assert_eq!(validation_result.unwrap_err(), expected);
+        }
     }
 
     #[test]
