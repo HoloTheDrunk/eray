@@ -1,27 +1,40 @@
 # eray
 
-Simple TUI shader editor and OpenGL viewer with raytraced screenshot
+Simple TUI shader graph editor and OpenGL viewer with raytraced screenshot
 capabilities.
 
-# Shader files (.eray)
+## Best-case scenario objectives
 
-.eray files are split into sections:
+ISIM:
+- [x] Object loading
+- [x] Generic graph-based computation pipeline
+- [~] Raytracer using the shader graph (texture mapping is currently bugged)
 
-## Node type signature
+POGL:
+- [~] Scene conversion for OpenGL
+- [ ] Shaderlib port to OpenGL shaders
+- [ ] Live OpenGL view
 
-An .eray file represents a fragment shader, which is also a node.
-As such, it needs to provide information on its inputs and outputs.
+TIFO:
+- [~] Post-processing pipeline setup
+- [ ] Library of post-processing effects
 
-## Custom node definition (import)
+Bonus:
+- [ ] .eray parsing and dumping
+- [ ] TUI editor
 
-Shaders defined in other .eray files can be required in this section, causing a
-controlled error if no loaded custom shader matches the name and inputs/outputs.
+## Running
 
-## Node declaration
+An example graph is already defined in `src/main.rs`, just run the following
+command in your shell (with the rust toolchain installed) and the output color
+texture will be saved as `color.ppm`.
 
-Nodes are instantiated with a name and a shader name.
+```sh
+cargo run
+```
 
-## Node linking
+## .eray shader files
 
-Nodes' sockets have to be linked to create the graph.
-This section also allows instantiation of standard type values.
+Shader graphs are meant to be fully representable as (and therefore storable to
+and loadable from) .eray files following the grammar defined in
+`src/lib/pest/grammar.pest`.
