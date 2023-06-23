@@ -1,5 +1,6 @@
 mod utils;
 
+pub mod flat_color;
 pub mod mix_color;
 pub mod rgb;
 pub mod wave;

@@ -276,7 +276,7 @@ pub struct Graph<State> {
 /// ```
 macro_rules! graph {
     { $($field:ident $(: $($name:literal : $value:expr),+)? $(,)?),+ } => {
-        Graph {
+        crate::shader::graph::Graph {
             $($field: [$($(($name.into(), $value)),+)?].into_iter().collect()),+,
             state: ::std::marker::PhantomData::<crate::shader::graph::Unvalidated>,
         }

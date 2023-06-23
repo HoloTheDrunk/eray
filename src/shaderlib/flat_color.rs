@@ -1,13 +1,13 @@
-//! Mapper from three [Value](SocketValue::Value) images to a [Color] image.
+//! Mapper from three [Number](SocketValue::Number) values to a [Color] image.
 //!
 //! Mandatory inputs:
-//! - width: Number, width of the output image
-//! - height: Number, height of the output image
-//! - red: Value
-//! - green: Value
-//! - blue: Value
+//! - red: Number
+//! - green: Number
+//! - blue: Number
 //!
 //! Output:
+//! - width: Number, width of the output image, defaults to 1
+//! - height: Number, height of the output image, defaults to 1
 //! - color: Color
 
 use crate::handle_missing_socket_values;
@@ -19,7 +19,7 @@ use eray::{
     prelude::*,
     shader::{
         self,
-        graph::{Graph, SocketType},
+        graph::{Graph, SocketType, SocketValue},
         shader::Side,
     },
     ssref,
@@ -40,12 +40,13 @@ pub fn graph() -> GraphResult {
     Ok(shader::graph::graph! {
         inputs:
             // Mandatory
-            "width": SocketType::Number.into(),
-            "height": SocketType::Number.into(),
+            "red": SocketType::Number.into(),
+            "green": SocketType::Number.into(),
+            "blue": SocketType::Number.into(),
 
-            "red": SocketType::Value.into(),
-            "green": SocketType::Value.into(),
-            "blue": SocketType::Value.into(),
+            // Optional
+            "width": SocketValue::Number(Some(1.)),
+            "height": SocketValue::Number(Some(1.)),
         nodes:
             "converter": {
                 let mut node = node()?;
@@ -67,35 +68,26 @@ pub fn node() -> NodeResult {
             "width": (None, SocketType::Number),
             "height": (None, SocketType::Number),
 
-            "red": (None, SocketType::Value),
-            "green": (None, SocketType::Value),
-            "blue": (None, SocketType::Value),
+            "red": (None, SocketType::Number),
+            "green": (None, SocketType::Number),
+            "blue": (None, SocketType::Number),
         outputs:
             "color": SocketType::Color.into();
         |inputs, outputs| {
             get_sv!( input | inputs  . "width": Number > width);
             get_sv!( input | inputs  . "height": Number > height);
 
-            get_sv!( input | inputs  . "red": Value > red);
-            get_sv!( input | inputs  . "green": Value > green);
-            get_sv!( input | inputs  . "blue": Value > blue);
+            get_sv!( input | inputs  . "red": Number > red);
+            get_sv!( input | inputs  . "green": Number > green);
+            get_sv!( input | inputs  . "blue": Number > blue);
 
             get_sv!(output | outputs . "color": Color > out);
 
             handle_missing_socket_values![width, height, red, green, blue];
 
-            let mut res = Image::new(*width as u32, *height as u32, Color::new(0., 0., 0.));
+            let mut res = Image::new(*width as u32, *height as u32, Color::new(*red, *green, *blue));
 
-            for y in 0..res.height {
-                for x in 0..res.width {
-                    let index = (y * res.width + x) as usize;
-                    let value = Color::new(red.pixels[index], green.pixels[index], blue.pixels[index]);
-                    res.pixels[index] = value;
-                }
-            }
-            res.save_as_ppm(std::path::Path::new("rgb.ppm"));
             out.replace(res);
-
 
             Ok(())
         }

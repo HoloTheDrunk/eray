@@ -28,7 +28,7 @@ use eray::{
 
 use map_macro::hash_map;
 
-const DEFAULT_FACTOR: f32 = 1.;
+pub const DEFAULT_FACTOR: f32 = 1.;
 
 pub fn material() -> MaterialResult {
     Ok(Material::from((

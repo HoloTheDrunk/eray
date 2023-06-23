@@ -14,7 +14,7 @@
 //! Output:
 //! - color: [Color](SocketValue::Color)
 
-use super::{utils::handle_missing_socket_values, GraphResult, MaterialResult, NodeResult};
+use super::{utils::handle_missing_socket_values, GraphResult, NodeResult};
 
 use eray::{
     get_sv, node,
@@ -23,19 +23,7 @@ use eray::{
     ssref,
 };
 
-use map_macro::hash_map;
-
 const DEFAULT_FACTOR: f32 = 0.5;
-
-/// Get a ready-to-use [Material](Material).
-pub fn material() -> MaterialResult {
-    Ok(Material::from((
-        graph()?.validate()?,
-        hash_map! {
-            StandardMaterialOutput::Color => "color".into(),
-        },
-    )))
-}
 
 /// Get a wrapping [Graph](Graph) containing the node.
 pub fn graph() -> GraphResult {
