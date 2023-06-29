@@ -1,5 +1,12 @@
 //! Flat (non-recursive) [Graph] data structure implementation.
 
+use super::{
+    shader::{Shader, Side},
+    Signature,
+};
+
+use crate::{color::Color, image::Image, vector::Vector};
+
 use std::{
     collections::{HashMap, VecDeque},
     convert::AsRef,
@@ -8,99 +15,107 @@ use std::{
     str::FromStr,
 };
 
-use super::{
-    shader::{Shader, Side},
-    Signature,
-};
-
-use crate::{color::Color, image::Image, vector::Vector};
+use paste::paste;
 
 macro_rules! socket_value {
     { $($(#[$attr:meta])* $name:ident : $type:ty = $default:expr),+ $(,)? } => {
-        #[derive(Clone, Debug, PartialEq)]
-        /// Possible socket value types.
-        pub enum SocketValue {
-            $(
-                $(#[$attr])*
-                $name(Option<$type>)
-            ),+
-        }
+        paste! {
+            #[derive(Clone, Debug, PartialEq)]
+            /// Possible socket value types.
+            pub enum SocketValue {
+                $(
+                    $(#[$attr])*
+                    $name(Option<$type>),
 
-        impl From<SocketType> for SocketValue {
-            fn from(value: SocketType) -> Self {
-                match value {
-                    $(
-                        SocketType::$name => Self::$name(None)
-                    ),+
-                }
+                    #[doc = concat!("Image of [", stringify!($name), "](", stringify!($name), ") values")]
+                    [<I  $name>](Option<Image<$type>>),
+                )+
             }
-        }
 
-        impl AsRef<SocketValue> for SocketValue {
-            fn as_ref(&self) -> &SocketValue {
-                self
-            }
-        }
-
-        impl SocketValue {
-            /// Check if the socket has a value
-            pub fn is_none(&self) -> bool {
-                match self {
-                    $(
-                        SocketValue::$name(opt) => opt.is_none()
-                    ),+
+            impl From<SocketType> for SocketValue {
+                fn from(value: SocketType) -> Self {
+                    match value {
+                        $(
+                            SocketType::$name => Self::$name(None),
+                            SocketType::[<I  $name>] => Self::[<I  $name>](None),
+                        )+
+                    }
                 }
             }
 
-            /// Set the contained value to its type's defined default.
-            pub fn set_default(&mut self) {
-                match self {
-                    $(
-                        SocketValue::$name(ref mut opt) => *opt = Some($default)
-                    ),+
+            impl AsRef<SocketValue> for SocketValue {
+                fn as_ref(&self) -> &SocketValue {
+                    self
                 }
             }
 
-            /// Get the contained value, defaulting it beforehand if it is None.
-            pub fn or_default(&mut self) -> &SocketValue {
-                if self.is_none() {
-                    self.set_default();
+            impl SocketValue {
+                /// Check if the socket has a value
+                pub fn is_none(&self) -> bool {
+                    match self {
+                        $(
+                            SocketValue::$name(opt) => opt.is_none(),
+                            SocketValue::[<I  $name>](opt) => opt.is_none(),
+                        )+
+                    }
                 }
 
-                self
-            }
-        }
+                /// Set the contained value to its type's defined default.
+                pub fn set_default(&mut self) {
+                    match self {
+                        $(
+                            SocketValue::$name(ref mut opt) => *opt = Some($default),
+                            SocketValue::[<I  $name>](ref mut opt) => *opt = Some(Image::default()),
+                        )+
+                    }
+                }
 
-        #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-        /// Possible socket types.
-        pub enum SocketType {
-            #[default]
-            $(
-                $(#[$attr])*
-                $name
-            ),+
-        }
+                /// Get the contained value, defaulting it beforehand if it is None.
+                pub fn or_default(&mut self) -> &SocketValue {
+                    if self.is_none() {
+                        self.set_default();
+                    }
 
-        impl<T: AsRef<SocketValue>> From<T> for SocketType {
-            fn from(value: T) -> Self {
-                match value.as_ref() {
-                    $(
-                        SocketValue::$name(_) => Self::$name
-                    ),+
+                    self
                 }
             }
-        }
 
-        impl FromStr for SocketType {
-            type Err = String;
+            #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+            /// Possible socket types.
+            pub enum SocketType {
+                #[default]
+                $(
+                    $(#[$attr])*
+                    $name,
 
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
-                Ok(match s {
-                    $(
-                        stringify!($name) => Self::$name
-                    ),+,
-                    other => Err(format!("Unrecognized socket type `{other}`."))?,
-                })
+                    #[doc = concat!("Image of [", stringify!($name), "](", stringify!($name), ") values")]
+                    [<I  $name>],
+                )+
+            }
+
+            impl<T: AsRef<SocketValue>> From<T> for SocketType {
+                fn from(value: T) -> Self {
+                    match value.as_ref() {
+                        $(
+                            SocketValue::$name(_) => Self::$name,
+                            SocketValue::[<I  $name>](_) => Self::[<I $name>],
+                        )+
+                    }
+                }
+            }
+
+            impl FromStr for SocketType {
+                type Err = String;
+
+                fn from_str(s: &str) -> Result<Self, Self::Err> {
+                    Ok(match s {
+                        $(
+                            stringify!($name) => Self::$name,
+                            [<I  $name>] => Self::[<I  $name>],
+                        )+
+                        other => Err(format!("Unrecognized socket type `{other}`."))?,
+                    })
+                }
             }
         }
     };
@@ -108,16 +123,13 @@ macro_rules! socket_value {
 
 socket_value! {
     /// Single value
-    Number: f32 = 0.,
-    /// Character [String]
-    String: String = String::from(""),
-
-    /// Image of floating-point values
-    Value: Image<f32> = Image::default(),
-    /// Image of [3D vectors](Vec3)
-    Vec3: Image<Vector<3, f32>> = Image::default(),
-    /// Image of [colors](Color)
-    Color: Image<Color> = Image::default(),
+    Value: f32 = 0.,
+    /// 2D vector
+    Vec2: Vector<2, f32> = Vector::default(),
+    /// 3D vector
+    Vec3: Vector<3, f32> = Vector::default(),
+    /// 3-channel color
+    Color: Color = Color::default(),
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
