@@ -56,10 +56,10 @@ fn main() -> std::io::Result<()> {
             transform: Transform::default().apply_translation(Vector::new(0., 2., 0.)),
             variant: LightVariant::Ambient,
             color: Color::new(1., 1., 1.),
-            brightness: 1.,
+            brightness: 0.2,
         })
         .add_light(Light {
-            transform: Transform::default().apply_translation(Vector::new(0., 2., 0.)),
+            transform: Transform::default().apply_translation(Vector::new(1., 1., 2.)),
             variant: LightVariant::Point,
             color: Color::new(1., 1., 1.),
             brightness: 1.,
