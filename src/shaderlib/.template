@@ -1,0 +1,40 @@
+use super::{GraphResult, MaterialResult, NodeResult};
+
+use eray::{
+    get_sv, node,
+    prelude::*,
+    shader::{
+        self,
+        graph::{Graph, SocketType},
+        shader::Side,
+    },
+    ssref,
+};
+
+use map_macro::hash_map;
+
+pub fn material() -> MaterialResult {
+    Ok(Material::from((
+        graph()?,
+        hash_map! {},
+    )))
+}
+
+pub fn graph() -> GraphResult {
+    shader::graph::graph! {
+        inputs,
+        nodes,
+        outputs,
+    }
+    .validate()
+}
+
+pub fn node() -> NodeResult {
+    Ok(node! {
+        inputs,
+        outputs,
+        |inputs, outputs| {
+            Ok(())
+        }
+    })
+}

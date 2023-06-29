@@ -8,8 +8,10 @@ use super::graph::{Name, SocketType, SocketValue};
 #[derive(Debug, PartialEq)]
 /// Possible errors returned during a [Shader]'s lifecycle.
 pub enum Error {
-    /// Missing socket.
+    /// Missing socket or value.
     Missing(Side, Name),
+    /// Missing many sockets or values.
+    MissingMany(Side, Vec<Name>),
     /// Wrong type for socket.
     MismatchedTypes((Name, SocketType), (Name, SocketType)),
     /// Tried to unwrap a socket with the wrong expected [SocketType].
@@ -103,6 +105,13 @@ where
 
 #[macro_export]
 /// [get](std::collections::HashMap::get)s the desired input/output field with error reporting
+///
+/// # Example
+///
+/// ```
+/// get_sv!( input | inputs  . "value" : Number > in_value);
+/// get_sv!(output | outputs . "value" : Number > out_value);
+/// ```
 macro_rules! get_sv {
     (input | $hashmap:ident . $field:literal : $type:ident > $name:ident) => {
         let $name = $hashmap.get(&$field.into()).ok_or_else(|| {

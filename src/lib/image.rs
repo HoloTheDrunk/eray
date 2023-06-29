@@ -6,7 +6,7 @@ use std::{
     path::Path,
 };
 
-use crate::vector::Vec3;
+use crate::vector::Vector;
 
 use super::color::Color;
 
@@ -34,7 +34,7 @@ impl<T: Clone> Image<T> {
 
     /// Get a pixel at x/y coordinates, with width/height modulos applied to the respective coordinates for easy tiling.
     pub fn mod_get(&self, x: u32, y: u32) -> T {
-        self.pixels[((y * self.width) % self.height + x % self.width) as usize].clone()
+        self.pixels[(((y % self.height) * self.width) + x % self.width) as usize].clone()
     }
 
     /// Set a pixel at x/y coordinates
@@ -74,12 +74,18 @@ impl Image<Color> {
     }
 }
 
-impl From<Image<Vec3>> for Image<Color> {
-    fn from(value: Image<Vec3>) -> Self {
+impl<IC: Copy + Into<f32>> From<Image<Vector<3, IC>>> for Image<Color> {
+    fn from(
+        Image::<Vector<3, IC>> {
+            width,
+            height,
+            pixels,
+        }: Image<Vector<3, IC>>,
+    ) -> Self {
         Self {
-            width: value.width,
-            height: value.height,
-            pixels: value.pixels.into_iter().map(|v| Color::from(v)).collect(),
+            width,
+            height,
+            pixels: pixels.into_iter().map(|v| Color::from(v)).collect(),
         }
     }
 }
@@ -111,7 +117,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_save() {
+    fn save_image_as_ppm() {
         let (width, height) = (1024, 1024);
         let mut image = Image {
             width,
@@ -150,5 +156,19 @@ mod test {
                 .output()
                 .expect("Error converting image to jpeg");
         }
+    }
+
+    #[test]
+    fn mod_get() {
+        let mut image = Image::new(10, 10, 0);
+
+        for (index, pixel) in image.pixels.iter_mut().enumerate() {
+            *pixel = index;
+        }
+
+        assert_eq!(
+            image.mod_get(123, 12),
+            image.pixels[(2 * image.width + 3) as usize]
+        );
     }
 }

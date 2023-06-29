@@ -2,23 +2,13 @@
 
 use std::ops::Mul;
 
-use crate::vector::Vec3;
+use crate::vector::Vector;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 /// 4x4 matrix
 pub struct Mat4 {
     /// Arrays storing the matrix data
     pub inner: [[f32; 4]; 4],
-}
-
-#[derive(Debug, Default)]
-/// 3D transformation representation
-pub struct Transform {
-    inner: Mat4,
-
-    translation: Vec3,
-    scale: Vec3,
-    rotation: Vec3,
 }
 
 impl Mul<Mat4> for Mat4 {
@@ -39,65 +29,93 @@ impl Mul<Mat4> for Mat4 {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+/// 3D transformation representation
+pub struct Transform {
+    inner: Mat4,
+
+    translation: Vector<3, f32>,
+    rotation: Vector<3, f32>,
+    scale: Vector<3, f32>,
+}
+
 impl Transform {
-    fn new_translation(delta: Vec3) -> Mat4 {
+    #[inline]
+    /// Inlined O(1) accessor.
+    pub fn translation(&self) -> Vector<3, f32> {
+        self.translation
+    }
+
+    #[inline]
+    /// Inlined O(1) accessor.
+    pub fn rotation(&self) -> Vector<3, f32> {
+        self.rotation
+    }
+
+    #[inline]
+    /// Inlined O(1) accessor.
+    pub fn scale(&self) -> Vector<3, f32> {
+        self.scale
+    }
+
+    fn new_translation(delta: Vector<3, f32>) -> Mat4 {
         let mut res = Mat4::default();
 
-        res.inner[0][3] = delta.x;
-        res.inner[1][3] = delta.y;
-        res.inner[2][3] = delta.z;
+        res.inner[0][3] = delta[0];
+        res.inner[1][3] = delta[1];
+        res.inner[2][3] = delta[2];
 
         res
     }
 
-    fn new_scaling(delta: Vec3) -> Mat4 {
+    fn new_scaling(delta: Vector<3, f32>) -> Mat4 {
         let mut res = Mat4::default();
 
-        res.inner[0][0] = delta.x;
-        res.inner[1][1] = delta.y;
-        res.inner[2][2] = delta.z;
+        res.inner[0][0] = delta[0];
+        res.inner[1][1] = delta[1];
+        res.inner[2][2] = delta[2];
 
         res
     }
 
-    fn new_rotation(axis: Vec3, angle: f32) -> Mat4 {
+    fn new_rotation(axis: Vector<3, f32>, angle: f32) -> Mat4 {
         let mut res = Mat4::default();
 
         let asin = angle.sin();
         let acos = angle.cos();
         let ncos = 1. - acos;
 
-        res.inner[0][0] = acos + axis.x.powi(2) * ncos;
-        res.inner[0][1] = axis.x * axis.y * ncos - axis.z * asin;
-        res.inner[0][2] = axis.x * axis.z * ncos + axis.y * asin;
+        res.inner[0][0] = acos + axis[0].powi(2) * ncos;
+        res.inner[0][1] = axis[0] * axis[1] * ncos - axis[2] * asin;
+        res.inner[0][2] = axis[0] * axis[2] * ncos + axis[1] * asin;
 
-        res.inner[1][0] = axis.y * axis.x * ncos + axis.z * asin;
-        res.inner[1][1] = acos + axis.y.powi(2) * ncos;
-        res.inner[1][2] = axis.y * axis.z * ncos - axis.x * asin;
+        res.inner[1][0] = axis[1] * axis[0] * ncos + axis[2] * asin;
+        res.inner[1][1] = acos + axis[1].powi(2) * ncos;
+        res.inner[1][2] = axis[1] * axis[2] * ncos - axis[0] * asin;
 
-        res.inner[2][0] = axis.z * axis.x * ncos - axis.y * asin;
-        res.inner[2][1] = axis.z * axis.y * ncos - axis.x * asin;
-        res.inner[2][2] = acos + axis.z.powi(2) * ncos;
+        res.inner[2][0] = axis[2] * axis[0] * ncos - axis[1] * asin;
+        res.inner[2][1] = axis[2] * axis[1] * ncos - axis[0] * asin;
+        res.inner[2][2] = acos + axis[2].powi(2) * ncos;
 
         res
     }
 
     /// Add a translation of `delta` to the [Transform]
-    pub fn translate(mut self, delta: Vec3) -> Self {
+    pub fn apply_translation(mut self, delta: Vector<3, f32>) -> Self {
         self.translation += delta;
         self.inner = self.inner * Transform::new_translation(delta);
         self
     }
 
     /// Scale by `delta`
-    pub fn scale(mut self, delta: Vec3) -> Self {
+    pub fn apply_scale(mut self, delta: Vector<3, f32>) -> Self {
         self.scale += delta;
         self.inner = self.inner * Transform::new_scaling(delta);
         self
     }
 
     /// Rotate by `angle` around `axis`
-    pub fn rotate(mut self, axis: Vec3, angle: f32) -> Self {
+    pub fn apply_rotation(mut self, axis: Vector<3, f32>, angle: f32) -> Self {
         self.rotation += axis * angle;
         self.inner = self.inner * Transform::new_rotation(axis.normalize(), angle);
         self
