@@ -12,61 +12,61 @@ use eray::{
 };
 use map_macro::hash_map;
 
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 fn main() -> std::io::Result<()> {
-    println!("Hello, world!");
+    // let mut cube = Object::load_obj(Path::new("./objects/cube.obj")).unwrap();
+    //
+    // // cube.material = shaderlib::wave::material().unwrap();
+    // cube.material = material().unwrap();
+    // cube.material
+    //     .set_input(&"width".into(), SocketValue::Number(Some(1024.)))
+    //     .unwrap()
+    //     .set_input(&"height".into(), SocketValue::Number(Some(1024.)))
+    //     .unwrap()
+    //     // Wave
+    //     .set_input(&"x_fac".into(), SocketValue::Number(Some(1.)))
+    //     .unwrap()
+    //     .set_input(&"y_fac".into(), SocketValue::Number(Some(1.)))
+    //     .unwrap()
+    //     // Color
+    //     .set_input(&"red".into(), SocketValue::Number(Some(1.)))
+    //     .unwrap()
+    //     .set_input(&"green".into(), SocketValue::Number(Some(0.)))
+    //     .unwrap()
+    //     .set_input(&"blue".into(), SocketValue::Number(Some(0.)))
+    //     .unwrap()
+    //     // Mixing
+    //     .set_input(&"factor".into(), SocketValue::Number(Some(0.5)))
+    //     .unwrap();
+    // cube.material.update().unwrap();
+    //
+    // let mut engine = Engine::new((1024, 1024), 0, 0);
+    // engine
+    //     .scene()
+    //     .set_camera(Camera {
+    //         center: Vector::new(0., 0., 5.),
+    //         fov: Fov(60., 60.),
+    //         width: 1024,
+    //         ..Default::default()
+    //     })
+    //     .add_light(Light {
+    //         transform: Transform::default().apply_translation(Vector::new(0., 2., 0.)),
+    //         variant: LightVariant::Ambient,
+    //         color: Color::new(1., 1., 1.),
+    //         brightness: 0.2,
+    //     })
+    //     .add_light(Light {
+    //         transform: Transform::default().apply_translation(Vector::new(1., 1., 2.)),
+    //         variant: LightVariant::Point,
+    //         color: Color::new(1., 1., 1.),
+    //         brightness: 1.,
+    //     })
+    //     .add_object(cube.build().unwrap());
+    //
+    // engine.render_to_path(Path::new("output.ppm")).unwrap();
 
-    let mut cube = Object::load_obj(Path::new("./objects/cube.obj")).unwrap();
-
-    // cube.material = shaderlib::wave::material().unwrap();
-    cube.material = material().unwrap();
-    cube.material
-        .set_input(&"width".into(), SocketValue::Number(Some(1024.)))
-        .unwrap()
-        .set_input(&"height".into(), SocketValue::Number(Some(1024.)))
-        .unwrap()
-        // Wave
-        .set_input(&"x_fac".into(), SocketValue::Number(Some(1.)))
-        .unwrap()
-        .set_input(&"y_fac".into(), SocketValue::Number(Some(1.)))
-        .unwrap()
-        // Color
-        .set_input(&"red".into(), SocketValue::Number(Some(1.)))
-        .unwrap()
-        .set_input(&"green".into(), SocketValue::Number(Some(0.)))
-        .unwrap()
-        .set_input(&"blue".into(), SocketValue::Number(Some(0.)))
-        .unwrap()
-        // Mixing
-        .set_input(&"factor".into(), SocketValue::Number(Some(0.5)))
-        .unwrap();
-    cube.material.update().unwrap();
-
-    let mut engine = Engine::new((1024, 1024), 0, 0);
-    engine
-        .scene()
-        .set_camera(Camera {
-            center: Vector::new(0., 0., 5.),
-            fov: Fov(60., 60.),
-            width: 1024,
-            ..Default::default()
-        })
-        .add_light(Light {
-            transform: Transform::default().apply_translation(Vector::new(0., 2., 0.)),
-            variant: LightVariant::Ambient,
-            color: Color::new(1., 1., 1.),
-            brightness: 0.2,
-        })
-        .add_light(Light {
-            transform: Transform::default().apply_translation(Vector::new(1., 1., 2.)),
-            variant: LightVariant::Point,
-            color: Color::new(1., 1., 1.),
-            brightness: 1.,
-        })
-        .add_object(cube.build().unwrap());
-
-    engine.render_to_path(Path::new("output.ppm")).unwrap();
+    // shader::parsing::parse_shader("nodes/rgb_wave.eray", &mut HashMap::new()).unwrap();
 
     Ok(())
 }
@@ -76,18 +76,18 @@ fn material() -> Result<Material, eray::shader::graph::Error> {
         eray::shader::graph::graph! {
             inputs:
                 // Mandatory
-                "width": SocketType::Number.into(),
-                "height": SocketType::Number.into(),
+                "width": SocketType::Value.into(),
+                "height": SocketType::Value.into(),
 
                 // Optional
-                "x_fac": SocketValue::Number(Some(shaderlib::wave::DEFAULT_FACTOR)),
-                "y_fac": SocketValue::Number(Some(shaderlib::wave::DEFAULT_FACTOR)),
+                "x_fac": SocketValue::Value(Some(shaderlib::wave::DEFAULT_FACTOR)),
+                "y_fac": SocketValue::Value(Some(shaderlib::wave::DEFAULT_FACTOR)),
 
-                "red": SocketValue::Number(Some(1.)),
-                "green": SocketValue::Number(Some(1.)),
-                "blue": SocketValue::Number(Some(1.)),
+                "red": SocketValue::Value(Some(1.)),
+                "green": SocketValue::Value(Some(1.)),
+                "blue": SocketValue::Value(Some(1.)),
 
-                "factor": SocketValue::Number(Some(0.5)),
+                "factor": SocketValue::Value(Some(0.5)),
             nodes:
                 "wave": {
                     let mut node = node!(import graph "wave" shaderlib::wave::graph()?);
@@ -125,8 +125,8 @@ fn material() -> Result<Material, eray::shader::graph::Error> {
                     node
                 },
             outputs:
-                "color": (ssref!(node "mixer" "color"), SocketType::Color.into()),
-                "diffuse": (ssref!(node "wave" "value"), SocketType::Value.into()),
+                "color": (ssref!(node "mixer" "color"), SocketType::IColor.into()),
+                "diffuse": (ssref!(node "wave" "value"), SocketType::IValue.into()),
         }
         .validate()
         .unwrap(),

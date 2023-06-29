@@ -158,11 +158,11 @@ mod test {
     #[test]
     fn shader_function_type() {
         let mut inputs = HashMap::new();
-        inputs.insert("value".into(), SocketType::Number.into());
+        inputs.insert("value".into(), SocketType::Value.into());
 
         Shader::new(|inputs, outputs| {
-            get_sv!( input | inputs  . "value" : Number > in_value);
-            get_sv!(output | outputs . "value" : Number > out_value);
+            get_sv!( input | inputs  . "value" : Value > in_value);
+            get_sv!(output | outputs . "value" : Value > out_value);
 
             let initial = out_value.clone();
 

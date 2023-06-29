@@ -20,6 +20,7 @@ use paste::paste;
 macro_rules! socket_value {
     { $($(#[$attr:meta])* $name:ident : $type:ty = $default:expr),+ $(,)? } => {
         paste! {
+            #[allow(unused)]
             #[derive(Clone, Debug, PartialEq)]
             /// Possible socket value types.
             pub enum SocketValue {
@@ -80,6 +81,7 @@ macro_rules! socket_value {
                 }
             }
 
+            #[allow(unused)]
             #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
             /// Possible socket types.
             pub enum SocketType {
@@ -111,7 +113,7 @@ macro_rules! socket_value {
                     Ok(match s {
                         $(
                             stringify!($name) => Self::$name,
-                            [<I  $name>] => Self::[<I  $name>],
+                            stringify!([<I  $name>]) => Self::[<I  $name>],
                         )+
                         other => Err(format!("Unrecognized socket type `{other}`."))?,
                     })
@@ -271,24 +273,24 @@ pub struct Graph<State> {
 /// ```
 /// graph! {
 ///     inputs:
-///         "iFac": SocketValue::Number(Some(2.)),
+///         "iFac": SocketValue::IValue(Some(2.)),
 ///         "iName": SocketValue::String(None),
 ///     nodes:
 ///         "identity": node! {
 ///             inputs:
-///                 "value": (ssref!(graph "iFac"), SocketType::Number),
+///                 "value": (ssref!(graph "iFac"), SocketType::IValue),
 ///             outputs:
-///                 "value": SocketType::Number.into();
+///                 "value": SocketType::IValue.into();
 ///             |_inputs, _outputs| Ok(())
 ///         },
 ///         "invert": node! {
 ///             inputs:
-///                 "value": (ssref!(node "identity" "value"), SocketType::Number),
+///                 "value": (ssref!(node "identity" "value"), SocketType::IValue),
 ///             outputs:
-///                 "value": SocketType::Number.into();
+///                 "value": SocketType::IValue.into();
 ///         },
 ///     outputs:
-///         "oFac": (ssref!(node "invert" "value"), SocketValue::Number(None)),
+///         "oFac": (ssref!(node "invert" "value"), SocketValue::IValue(None)),
 /// };
 /// ```
 macro_rules! graph {
@@ -689,12 +691,12 @@ impl<State> Node<State> {
 /// ```
 /// node! {
 ///     inputs:
-///         "value": (ssref!(graph "iFac"), SocketType::Number.into()),
+///         "value": (ssref!(graph "iFac"), SocketType::IValue.into()),
 ///     outputs:
-///         "value": SocketValue::Number(None);
+///         "value": SocketValue::IValue(None);
 ///     |inputs, outputs| {
-///         get_sv!( input | inputs  . "value" : Number > in_value);
-///         get_sv!(output | outputs . "value" : Number > out_value);
+///         get_sv!( input | inputs  . "value" : Value > in_value);
+///         get_sv!(output | outputs . "value" : Value > out_value);
 ///
 ///         *out_value.get_or_insert(0.) = in_value.unwrap_or(0.);
 ///
@@ -798,16 +800,16 @@ mod test {
                 "identity",
                 graph! {
                     inputs:
-                        "value": SocketValue::Number(Some(0.)),
+                        "value": SocketValue::Value(Some(0.)),
                     nodes:
                         "id": node! {
                             inputs:
-                                "value": (None, SocketType::Number),
+                                "value": (None, SocketType::Value),
                             outputs:
-                                "value": SocketType::Number.into();
+                                "value": SocketType::Value.into();
                             |inputs, outputs| {
-                                get_sv!(input | inputs . "value" : Number > in_value);
-                                get_sv!(output | outputs . "value" : Number > out_value);
+                                get_sv!(input | inputs . "value" : Value > in_value);
+                                get_sv!(output | outputs . "value" : Value > out_value);
 
                                 *out_value.get_or_insert(0.) = in_value.unwrap_or(0.);
 
@@ -815,7 +817,7 @@ mod test {
                             }
                         },
                     outputs:
-                        "value": (ssref!(node "id" "value"), SocketType::Number.into()),
+                        "value": (ssref!(node "id" "value"), SocketType::Value.into()),
                 },
             )),
         ))
@@ -831,15 +833,15 @@ mod test {
 
             let validation_result = graph! {
                 inputs:
-                    "value": SocketType::Number.into(),
+                    "value": SocketType::IValue.into(),
                 nodes:
                     "a": node! {
                         import "identity" from imported,
                         inputs:
-                            "value": (ssref!(graph "value"), SocketType::Number)
+                            "value": (ssref!(graph "value"), SocketType::IValue)
                 },
                 outputs:
-                    "value": (ssref!(node "a" "value"), SocketType::Number.into()),
+                    "value": (ssref!(node "a" "value"), SocketType::IValue.into()),
             }
             .validate();
 
@@ -859,15 +861,15 @@ mod test {
                     "a": node! {
                         import "identity" from imported,
                         inputs:
-                            "value": (ssref!(node "b" "value"), SocketType::Number),
+                            "value": (ssref!(node "b" "value"), SocketType::IValue),
                     },
                     "b": node! {
                         import "identity" from imported,
                         inputs:
-                            "value": (ssref!(node "a" "value"), SocketType::Number),
+                            "value": (ssref!(node "a" "value"), SocketType::IValue),
                     },
                 outputs:
-                    "value": (ssref!(node "a" "value"), SocketType::Number.into()),
+                    "value": (ssref!(node "a" "value"), SocketType::IValue.into()),
             }
             .validate();
 
@@ -891,8 +893,7 @@ mod test {
     fn macro_validity() {
         let manual = Graph {
             inputs: [
-                (Name::from("iFac"), SocketValue::Number(Some(2.))),
-                (Name::from("iName"), SocketValue::String(None)),
+                (Name::from("iFac"), SocketValue::Value(Some(2.))),
             ]
             .into_iter()
             .collect(),
@@ -904,11 +905,11 @@ mod test {
                             Name::from("value"),
                             (
                                 Some(SocketRef::Graph(Name::from("iFac"))),
-                                SocketType::Number,
+                                SocketType::Value,
                             ),
                         ))
                         .collect(),
-                        outputs: std::iter::once((Name::from("value"), SocketValue::Number(None)))
+                        outputs: std::iter::once((Name::from("value"), SocketValue::Value(None)))
                             .collect(),
                         ..Default::default()
                     },
@@ -923,11 +924,11 @@ mod test {
                                     NodeId::from("identity"),
                                     Name::from("value"),
                                 )),
-                                SocketType::Number,
+                                SocketType::Value,
                             ),
                         ))
                         .collect(),
-                        outputs: [(Name::from("value"), SocketValue::Number(None))]
+                        outputs: [(Name::from("value"), SocketValue::Value(None))]
                             .into_iter()
                             .collect(),
                         ..Default::default()
@@ -941,7 +942,7 @@ mod test {
                 Name::from("oFac"),
                 (
                     Some(SocketRef::Node(NodeId::from("invert"), Name::from("value"))),
-                    SocketValue::Number(None),
+                    SocketValue::Value(None),
                 ),
             ))
             .collect(),
@@ -950,23 +951,22 @@ mod test {
 
         let r#macro = graph! {
             inputs:
-                "iFac": SocketValue::Number(Some(2.)),
-                "iName": SocketValue::String(None),
+                "iFac": SocketValue::Value(Some(2.)),
             nodes:
                 "identity": node! {
                     inputs:
-                        "value": (ssref!(graph "iFac"), SocketType::Number),
+                        "value": (ssref!(graph "iFac"), SocketType::Value),
                     outputs:
-                        "value": SocketType::Number.into()
+                        "value": SocketType::Value.into()
                 },
                 "invert": node! {
                     inputs:
-                        "value": (ssref!(node "identity" "value"), SocketType::Number),
+                        "value": (ssref!(node "identity" "value"), SocketType::Value),
                     outputs:
-                        "value": SocketType::Number.into();
+                        "value": SocketType::Value.into();
                 },
             outputs:
-                "oFac": (ssref!(node "invert" "value"), SocketValue::Number(None)),
+                "oFac": (ssref!(node "invert" "value"), SocketValue::Value(None)),
         };
 
         assert_eq!(manual, r#macro);

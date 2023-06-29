@@ -7,7 +7,7 @@ use super::{
     Signature,
 };
 
-use crate::{image::Image, vector::Vec3};
+use crate::{image::Image, vector::Vector};
 
 use std::{collections::HashMap, fmt::Debug, str::FromStr};
 
@@ -42,7 +42,7 @@ macro_rules! match_rule {
             $(
                 Rule::$rule => $action,
             )*
-            _ => unreachable!(),
+            _ => unreachable!("While matching {:?}", $pair.as_rule()),
         }
     }
 }
@@ -324,7 +324,8 @@ fn parse_links(
     links
         .into_inner()
         .map(|link| parse_link(link, graph_signature, nodes))
-        .collect()
+        .collect::<PResult<Vec<Vec<Link>>>>()
+        .map(|vvec| vvec.into_iter().flatten().collect())
 }
 
 fn parse_link(
@@ -354,11 +355,11 @@ fn parse_expr(
 
     let ty = SocketType::from_str(inner.next().unwrap().as_str());
     let value = inner.next().unwrap();
-    let value = match_rule! {
-        value:
-            field => parse_field(value, graph_signature, nodes, &Side::Input),
-            literal => parse_literal(value, graph_signature, nodes),
-    }?;
+    // let value = match_rule! {
+    //     value:
+    //         field => parse_field(value, graph_signature, nodes, &Side::Input),
+    //         literal => parse_literal(value, graph_signature, nodes),
+    // }?;
 
     todo!()
 }
@@ -372,7 +373,7 @@ fn parse_literal(
 
     let value = match_rule! {
         inner:
-            value => SocketValue::Value(Some(Image::new(1, 1, inner.into_inner().next().unwrap().as_str().parse::<f32>().unwrap()))),
+            value => SocketValue::Value(Some(inner.into_inner().next().unwrap().as_str().parse::<f32>().unwrap())),
             vector => {
                 let values = inner
                     .into_inner()
@@ -380,9 +381,9 @@ fn parse_literal(
                     .collect::<Result<Vec<f32>, _>>()
                     .unwrap();
 
-                let image = Image::new(1, 1, Vec3::new(values[0], values[1], values[2]));
+                let vector = Vector::new(values[0], values[1], values[2]);
 
-                SocketValue::Vec3(Some(image))
+                SocketValue::Vec3(Some(vector))
             },
     };
 

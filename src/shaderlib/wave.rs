@@ -1,12 +1,12 @@
 //! Sine wave.
 //!
 //! Mandatory inputs:
-//! - width: Number, width of the output image
-//! - height: Number, height of the output image
+//! - width: Value, width of the output image
+//! - height: Value, height of the output image
 //!
 //! Optional inputs:
-//! - x_fac: Number, multiplier for x direction, default is 1.
-//! - y_fac: Number, multiplier for y direction, default is 1.
+//! - x_fac: Value, multiplier for x direction, default is 1.
+//! - y_fac: Value, multiplier for y direction, default is 1.
 //!
 //! Output:
 //! - value: Value
@@ -35,12 +35,12 @@ pub fn material() -> MaterialResult {
         shader::graph::graph! {
             inputs:
                 // Mandatory
-                "width": SocketType::Number.into(),
-                "height": SocketType::Number.into(),
+                "width": SocketType::Value.into(),
+                "height": SocketType::Value.into(),
 
                 // Optional
-                "x_fac": SocketValue::Number(Some(DEFAULT_FACTOR)),
-                "y_fac": SocketValue::Number(Some(DEFAULT_FACTOR)),
+                "x_fac": SocketValue::Value(Some(DEFAULT_FACTOR)),
+                "y_fac": SocketValue::Value(Some(DEFAULT_FACTOR)),
             nodes:
                 "inner": {
                     let map = hash_map!{
@@ -64,7 +64,7 @@ pub fn material() -> MaterialResult {
                     node
                 },
             outputs:
-                "color": (ssref!(node "viewer" "color"), SocketType::Color.into()),
+                "color": (ssref!(node "viewer" "color"), SocketType::IColor.into()),
         }
         .validate()?,
         hash_map! {
@@ -77,12 +77,12 @@ pub fn graph() -> GraphResult {
     Ok(shader::graph::graph! {
         inputs:
             // Mandatory
-            "width": SocketType::Number.into(),
-            "height": SocketType::Number.into(),
+            "width": SocketType::Value.into(),
+            "height": SocketType::Value.into(),
 
             // Optional
-            "x_fac": SocketValue::Number(Some(DEFAULT_FACTOR)),
-            "y_fac": SocketValue::Number(Some(DEFAULT_FACTOR)),
+            "x_fac": SocketValue::Value(Some(DEFAULT_FACTOR)),
+            "y_fac": SocketValue::Value(Some(DEFAULT_FACTOR)),
         nodes:
             "wave": {
                 let mut node = node()?;
@@ -93,28 +93,28 @@ pub fn graph() -> GraphResult {
                 node
             },
         outputs:
-            "value": (ssref!(node "wave" "value"), SocketType::Number.into()),
+            "value": (ssref!(node "wave" "value"), SocketType::Value.into()),
     })
 }
 
 pub fn node() -> NodeResult {
     Ok(node! {
         inputs:
-            "width": (None, SocketType::Number),
-            "height": (None, SocketType::Number),
+            "width": (None, SocketType::Value),
+            "height": (None, SocketType::Value),
 
-            "x_fac": (None, SocketType::Number),
-            "y_fac": (None, SocketType::Number),
+            "x_fac": (None, SocketType::Value),
+            "y_fac": (None, SocketType::Value),
         outputs:
-            "value": SocketType::Value.into();
+            "value": SocketType::IValue.into();
         |inputs, outputs| {
-            get_sv!( input | inputs  . "width": Number > width);
-            get_sv!( input | inputs  . "height": Number > height);
+            get_sv!( input | inputs  . "width": Value > width);
+            get_sv!( input | inputs  . "height": Value > height);
 
-            get_sv!( input | inputs  . "x_fac": Number > x_fac);
-            get_sv!( input | inputs  . "y_fac": Number > y_fac);
+            get_sv!( input | inputs  . "x_fac": Value > x_fac);
+            get_sv!( input | inputs  . "y_fac": Value > y_fac);
 
-            get_sv!(output | outputs . "value": Value > out);
+            get_sv!(output | outputs . "value": IValue > out);
 
             handle_missing_socket_values![width, height];
             let x_fac = x_fac.unwrap_or(DEFAULT_FACTOR);

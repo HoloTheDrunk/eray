@@ -44,7 +44,7 @@ impl Material {
             .map(|name| self.graph.outputs.get(name))
             .flatten()
             .map(|(_ref, value)| match value {
-                SocketValue::Color(image) => image
+                SocketValue::IColor(image) => image
                     .as_ref()
                     .map(|image| image.save_as_ppm(std::path::Path::new("color.ppm"))),
                 _ => panic!(),
@@ -61,7 +61,7 @@ impl Material {
                 .map(|name| self.graph.outputs.get(name))
                 .flatten()
                 .map(|(_ref, value)| match value {
-                    SocketValue::Value(image) => image.as_ref().map(|image| {
+                    SocketValue::IValue(image) => image.as_ref().map(|image| {
                         image.mod_get(
                             (x * image.width as f32) as u32,
                             (y * image.height as f32) as u32,
@@ -82,7 +82,7 @@ impl Material {
                 })
                 .flatten()
                 .map(|(_ref, value)| match value {
-                    SocketValue::Color(image) => image.as_ref().map(|image| {
+                    SocketValue::IColor(image) => image.as_ref().map(|image| {
                         image.mod_get(
                             (x * image.width as f32) as u32,
                             (y * image.height as f32) as u32,
