@@ -114,7 +114,7 @@ impl Engine<Building> {
         let mut closest: Option<f32> = None;
 
         for object in self.scene.objects.iter() {
-            let Some(RaycastHit { face_index: _, position, normal, material }) = object.intersects(&ray) else {continue;};
+            let Some(RaycastHit { face_index: _, position, normal, material }) = object.intersects(ray) else {continue;};
 
             // Ignore if further than closest encountered
             let dist_sq = (position - self.scene.camera.center).len_sq();
@@ -169,8 +169,8 @@ impl Engine<Building> {
                                     &(light.transform.translation() - position).normalize(),
                                 )
                                 .powf(specular_power))
-                        .clamp(0., 1.) as f32;
-                        Color::new(res as f32, res as f32, res as f32)
+                        .clamp(0., 1.);
+                        Color::new(res, res, res)
                     } * falloff.powf(specular_power).clamp(0., 1.);
 
                     let result = diffusion + specular;

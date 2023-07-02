@@ -27,6 +27,7 @@ impl<State> Debug for Scene<State> {
 }
 
 impl Scene<Building> {
+    /// Create a scene empty but for the given [Camera].
     pub fn new(camera: Camera) -> Self {
         Self {
             camera,

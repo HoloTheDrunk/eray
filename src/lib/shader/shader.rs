@@ -1,19 +1,28 @@
 //! Shader implementation, a [Shader] being a wrapper containing functions of a specific type
 //! signature with convenience functions.
 
-use std::collections::HashMap;
-
 use super::graph::{Name, SocketType, SocketValue};
 
-#[derive(Debug, PartialEq)]
+use std::collections::HashMap;
+
+#[derive(Debug, PartialEq, thiserror::Error)]
 /// Possible errors returned during a [Shader]'s lifecycle.
 pub enum Error {
+    #[error("Missing {} on {0:?} side", .1.to_string())]
     /// Missing socket or value.
     Missing(Side, Name),
+
+    #[error("Missing {} on {0:?} side", .1.iter().map(|v| v.to_string()).collect::<Vec<String>>().join(", "))]
     /// Missing many sockets or values.
     MissingMany(Side, Vec<Name>),
+
+    #[error("Mismatched type between {} ({:?}) and {} ({:?})", 
+        {let (name, _) = .0; name.to_string()}, {let (_, ty) = .0; ty},
+        {let (name, _) = .1; name.to_string()}, {let (_, ty) = .1; ty})]
     /// Wrong type for socket.
     MismatchedTypes((Name, SocketType), (Name, SocketType)),
+
+    #[error("Invalid type {got:?} for {}, expected {expected:?}", .name.to_string())]
     /// Tried to unwrap a socket with the wrong expected [SocketType].
     InvalidType {
         /// [Name] of the socket.
@@ -23,11 +32,13 @@ pub enum Error {
         /// Actual [SocketType] of the socket.
         expected: SocketType,
     },
+
+    #[error("Unknown error{}", .0.as_ref().map_or("".to_string(), |v| format!(": {v}")))]
     /// Unknown or untyped error
     Unknown(Option<String>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 /// Socket side.
 pub enum Side {
     #[allow(missing_docs)]
@@ -45,14 +56,16 @@ impl Shader {
     /// Creates a [Shader] from a shader function.
     /// # Example
     /// ```
+    /// use eray::{get_sv, shader::{shader::Shader}};
+    ///
     /// Shader::new(|inputs, outputs| {
-    ///     get_sv!(input  | inputs  . "value" : Number > in_value);
-    ///     get_sv!(output | outputs . "value" : Number > out_value);
+    ///     get_sv!(input  | inputs  . "value" : Value > in_value);
+    ///     get_sv!(output | outputs . "value" : Value > out_value);
     ///
     ///     *out_value.get_or_insert(0.) = -in_value.unwrap_or(0.);
     ///
     ///     Ok(())
-    /// })
+    /// });
     /// ```
     pub fn new(
         func: fn(&HashMap<Name, SocketValue>, &mut HashMap<Name, SocketValue>) -> Result<(), Error>,
@@ -88,7 +101,7 @@ impl Clone for Shader {
 
 /// Intermediary trait to allow boxing function inside a struct.
 pub trait CloneFn:
-    Fn(&HashMap<Name, SocketValue>, &mut HashMap<Name, SocketValue>) -> Result<(), Error>
+    Send + Sync + Fn(&HashMap<Name, SocketValue>, &mut HashMap<Name, SocketValue>) -> Result<(), Error>
 {
     /// Clone the boxed function.
     fn clone_box(&self) -> Box<dyn CloneFn>;
@@ -96,7 +109,9 @@ pub trait CloneFn:
 
 impl<F: Clone + 'static> CloneFn for F
 where
-    F: Fn(&HashMap<Name, SocketValue>, &mut HashMap<Name, SocketValue>) -> Result<(), Error>,
+    F: Send
+        + Sync
+        + Fn(&HashMap<Name, SocketValue>, &mut HashMap<Name, SocketValue>) -> Result<(), Error>,
 {
     fn clone_box(&self) -> Box<dyn CloneFn> {
         Box::new(self.clone())
@@ -109,41 +124,54 @@ where
 /// # Example
 ///
 /// ```
-/// get_sv!( input | inputs  . "value" : Number > in_value);
-/// get_sv!(output | outputs . "value" : Number > out_value);
+/// use eray::{get_sv, shader::graph::{Name, SocketType, SocketValue}};
+/// use std::collections::HashMap;
+///
+/// let mut inputs = HashMap::<Name, SocketValue>::new();
+/// inputs.insert("value".into(), SocketType::Value.into());
+/// let mut outputs = inputs.clone();
+///
+/// (|| {
+///     get_sv!( input | inputs  . "value" : Value > in_value);
+///     get_sv!(output | outputs . "value" : Value > out_value);
+///     Ok(())
+/// })().unwrap();
 /// ```
 macro_rules! get_sv {
     (input | $hashmap:ident . $field:literal : $type:ident > $name:ident) => {
         let $name = $hashmap.get(&$field.into()).ok_or_else(|| {
-            crate::shader::shader::Error::Missing(crate::shader::shader::Side::Input, $field.into())
+            $crate::shader::shader::Error::Missing(
+                $crate::shader::shader::Side::Input,
+                $field.into(),
+            )
         })?;
 
         #[rustfmt::skip]
-        let crate::shader::graph::SocketValue::$type($name) = $name
+        let $crate::shader::graph::SocketValue::$type($name) = $name
             else {
-                return Err(crate::shader::shader::Error::InvalidType {
+                return Err($crate::shader::shader::Error::InvalidType {
                     name: $field.into(),
-                    got: crate::shader::graph::SocketType::from($name),
-                    expected: crate::shader::graph::SocketType::$type,
+                    got: $crate::shader::graph::SocketType::from($name),
+                    expected: $crate::shader::graph::SocketType::$type,
                 });
             };
     };
 
     (output | $hashmap:ident . $field:literal : $type:ident > $name:ident) => {
         let $name = $hashmap.get_mut(&$field.into()).ok_or_else(|| {
-            crate::shader::shader::Error::Missing(
-                crate::shader::shader::Side::Output,
+            $crate::shader::shader::Error::Missing(
+                $crate::shader::shader::Side::Output,
                 $field.into(),
             )
         })?;
 
         #[rustfmt::skip]
-        let crate::shader::graph::SocketValue::$type(ref mut $name) = $name
+        let $crate::shader::graph::SocketValue::$type(ref mut $name) = $name
             else {
-                return Err(crate::shader::shader::Error::InvalidType {
+                return Err($crate::shader::shader::Error::InvalidType {
                     name: $field.into(),
-                    got: crate::shader::graph::SocketType::from($name),
-                    expected: crate::shader::graph::SocketType::$type,
+                    got: $crate::shader::graph::SocketType::from($name),
+                    expected: $crate::shader::graph::SocketType::$type,
                 });
             };
     };
@@ -158,17 +186,17 @@ mod test {
     #[test]
     fn shader_function_type() {
         let mut inputs = HashMap::new();
-        inputs.insert("value".into(), SocketType::Number.into());
+        inputs.insert("value".into(), SocketType::Value.into());
 
         Shader::new(|inputs, outputs| {
-            get_sv!( input | inputs  . "value" : Number > in_value);
-            get_sv!(output | outputs . "value" : Number > out_value);
+            get_sv!( input | inputs  . "value" : Value > in_value);
+            get_sv!(output | outputs . "value" : Value > out_value);
 
-            let initial = out_value.clone();
+            let initial = *out_value;
 
             *out_value.get_or_insert(0.) += in_value.unwrap_or(0.);
 
-            let modified = out_value.clone();
+            let modified = *out_value;
 
             assert_ne!(initial, modified);
 

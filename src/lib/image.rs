@@ -74,6 +74,46 @@ impl Image<Color> {
     }
 }
 
+/// Allows for easy conversion between different image types.
+pub trait Convertible<Target, Source: Into<Target>> {
+    /// Convert image type if the underlying pixel type can be converted.
+    fn convert_image(self, method: fn(Source) -> Target) -> Image<Target>;
+}
+
+impl<Target, Source: Into<Target>> Convertible<Target, Source> for Image<Source> {
+    fn convert_image(self, method: fn(Source) -> Target) -> Image<Target> {
+        let Self {
+            width,
+            height,
+            pixels,
+        } = self;
+
+        Image::<Target> {
+            width,
+            height,
+            pixels: pixels.into_iter().map(method).collect(),
+        }
+    }
+}
+
+// impl<const SDIM: usize, const DDIM: usize, TYPE> Convertible<Vector<DDIM, TYPE>>
+//     for Image<Vector<SDIM, TYPE>>
+// {
+//     fn convert_image(self) -> Image<Vector<DDIM, TYPE>> {
+//         let Self {
+//             width,
+//             height,
+//             pixels,
+//         } = self;
+//
+//         Image::<Target> {
+//             width,
+//             height,
+//             pixels: pixels.into_iter().map(Vector::resize).collect(),
+//         }
+//     }
+// }
+
 impl<IC: Copy + Into<f32>> From<Image<Vector<3, IC>>> for Image<Color> {
     fn from(
         Image::<Vector<3, IC>> {
@@ -85,7 +125,7 @@ impl<IC: Copy + Into<f32>> From<Image<Vector<3, IC>>> for Image<Color> {
         Self {
             width,
             height,
-            pixels: pixels.into_iter().map(|v| Color::from(v)).collect(),
+            pixels: pixels.into_iter().map(Color::from).collect(),
         }
     }
 }
@@ -95,17 +135,17 @@ impl From<Image<f32>> for Image<Color> {
         Self {
             width: value.width,
             height: value.height,
-            pixels: value.pixels.into_iter().map(|v| Color::from(v)).collect(),
+            pixels: value.pixels.into_iter().map(Color::from).collect(),
         }
     }
 }
 
-impl<T> Default for Image<T> {
+impl<T: Default> Default for Image<T> {
     fn default() -> Self {
         Self {
-            width: 0,
-            height: 0,
-            pixels: vec![],
+            width: 1,
+            height: 1,
+            pixels: vec![T::default()],
         }
     }
 }

@@ -9,6 +9,7 @@ use ::derive_more::{Add, AddAssign};
 
 use crate::vector::Vector;
 
+#[repr(C)]
 #[derive(Clone, Copy, Default, Debug, Add, AddAssign, PartialEq)]
 /// RGB color data type (normalized values are in the 0..=1 range)
 pub struct Color {
@@ -105,5 +106,11 @@ impl<T: Copy + Into<f32>> From<Vector<3, T>> for Color {
 impl From<f32> for Color {
     fn from(value: f32) -> Self {
         Color::new(value, value, value)
+    }
+}
+
+impl From<Color> for f32 {
+    fn from(val: Color) -> Self {
+        (val.r + val.g + val.b) / 3.
     }
 }

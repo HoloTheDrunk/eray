@@ -1,14 +1,14 @@
-//! Mapper from three [Number](SocketValue::Number) values to a [Color] image.
+//! Mapper from three [Value](SocketValue::Value) values to a [IColor] image.
 //!
 //! Mandatory inputs:
-//! - red: Number
-//! - green: Number
-//! - blue: Number
+//! - red: Value
+//! - green: Value
+//! - blue: Value
 //!
 //! Output:
-//! - width: Number, width of the output image, defaults to 1
-//! - height: Number, height of the output image, defaults to 1
-//! - color: Color
+//! - width: Value, width of the output image, defaults to 1
+//! - height: Value, height of the output image, defaults to 1
+//! - color: IColor
 
 use crate::handle_missing_socket_values;
 
@@ -40,13 +40,13 @@ pub fn graph() -> GraphResult {
     Ok(shader::graph::graph! {
         inputs:
             // Mandatory
-            "red": SocketType::Number.into(),
-            "green": SocketType::Number.into(),
-            "blue": SocketType::Number.into(),
+            "red": SocketType::Value.into(),
+            "green": SocketType::Value.into(),
+            "blue": SocketType::Value.into(),
 
             // Optional
-            "width": SocketValue::Number(Some(1.)),
-            "height": SocketValue::Number(Some(1.)),
+            "width": SocketValue::Value(Some(1.)),
+            "height": SocketValue::Value(Some(1.)),
         nodes:
             "converter": {
                 let mut node = node()?;
@@ -58,30 +58,30 @@ pub fn graph() -> GraphResult {
                 node
             },
         outputs:
-            "color": (ssref!(node "converter" "color"), SocketType::Color.into()),
+            "color": (ssref!(node "converter" "color"), SocketType::IColor.into()),
     })
 }
 
 pub fn node() -> NodeResult {
     Ok(node! {
         inputs:
-            "width": (None, SocketType::Number),
-            "height": (None, SocketType::Number),
+            "width": (None, SocketType::Value),
+            "height": (None, SocketType::Value),
 
-            "red": (None, SocketType::Number),
-            "green": (None, SocketType::Number),
-            "blue": (None, SocketType::Number),
+            "red": (None, SocketType::Value),
+            "green": (None, SocketType::Value),
+            "blue": (None, SocketType::Value),
         outputs:
-            "color": SocketType::Color.into();
+            "color": SocketType::IColor.into();
         |inputs, outputs| {
-            get_sv!( input | inputs  . "width": Number > width);
-            get_sv!( input | inputs  . "height": Number > height);
+            get_sv!( input | inputs  . "width": Value > width);
+            get_sv!( input | inputs  . "height": Value > height);
 
-            get_sv!( input | inputs  . "red": Number > red);
-            get_sv!( input | inputs  . "green": Number > green);
-            get_sv!( input | inputs  . "blue": Number > blue);
+            get_sv!( input | inputs  . "red": Value > red);
+            get_sv!( input | inputs  . "green": Value > green);
+            get_sv!( input | inputs  . "blue": Value > blue);
 
-            get_sv!(output | outputs . "color": Color > out);
+            get_sv!(output | outputs . "color": IColor > out);
 
             handle_missing_socket_values![width, height, red, green, blue];
 

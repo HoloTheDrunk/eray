@@ -1,18 +1,18 @@
 //! Mix two colors together by a factor.
 //!
 //! Mandatory inputs:
-//! - width: [Number](SocketValue::Number), width of the output image
-//! - height: [Number](SocketValue::Number), height of the output image
-//! - left: [Color](SocketValue::Color)
-//! - right: [Color](SocketValue::Color)
+//! - width: [Value](SocketValue::IValue), width of the output image
+//! - height: [Value](SocketValue::IValue), height of the output image
+//! - left: [Color](SocketValue::IColor)
+//! - right: [Color](SocketValue::IColor)
 //!
 //! Optional inputs:
-//! - factor: [Number](SocketValue::Number), mixing factor
+//! - factor: [Value](SocketValue::IValue), mixing factor
 //!   - used in `left * (1 - factor) + factor * right`
 //!   - default: `DEFAULT_FACTOR`
 //!
 //! Output:
-//! - color: [Color](SocketValue::Color)
+//! - color: [Color](SocketValue::IColor)
 
 use super::{utils::handle_missing_socket_values, GraphResult, NodeResult};
 
@@ -30,14 +30,14 @@ pub fn graph() -> GraphResult {
     Ok(shader::graph::graph! {
         inputs:
             // Mandatory
-            "width": SocketType::Number.into(),
-            "height": SocketType::Number.into(),
+            "width": SocketType::IValue.into(),
+            "height": SocketType::IValue.into(),
 
-            "left": SocketType::Color.into(),
-            "right": SocketType::Color.into(),
+            "left": SocketType::IColor.into(),
+            "right": SocketType::IColor.into(),
 
             // Optional
-            "factor": SocketValue::Number(Some(DEFAULT_FACTOR)),
+            "factor": SocketValue::Value(Some(DEFAULT_FACTOR)),
         nodes:
             "mix": {
                 let mut node = node()?;
@@ -49,7 +49,7 @@ pub fn graph() -> GraphResult {
                 node
             },
         outputs:
-            "color": (ssref!(node "mix" "color"), SocketType::Color.into()),
+            "color": (ssref!(node "mix" "color"), SocketType::IColor.into()),
     })
 }
 
@@ -57,25 +57,25 @@ pub fn graph() -> GraphResult {
 pub fn node() -> NodeResult {
     Ok(node! {
         inputs:
-            "width": (None, SocketType::Number),
-            "height": (None, SocketType::Number),
+            "width": (None, SocketType::IValue),
+            "height": (None, SocketType::IValue),
 
-            "left": (None, SocketType::Color),
-            "right": (None, SocketType::Color),
+            "left": (None, SocketType::IColor),
+            "right": (None, SocketType::IColor),
 
-            "factor": (None, SocketType::Number),
+            "factor": (None, SocketType::IValue),
         outputs:
-            "color": SocketType::Color.into();
+            "color": SocketType::IColor.into();
         |inputs, outputs| {
-            get_sv!( input | inputs  . "width": Number > width);
-            get_sv!( input | inputs  . "height": Number > height);
+            get_sv!( input | inputs  . "width": Value > width);
+            get_sv!( input | inputs  . "height": Value > height);
 
-            get_sv!( input | inputs  . "left": Color > left);
-            get_sv!( input | inputs  . "right": Color > right);
+            get_sv!( input | inputs  . "left": IColor > left);
+            get_sv!( input | inputs  . "right": IColor > right);
 
-            get_sv!( input | inputs  . "factor": Number > factor);
+            get_sv!( input | inputs  . "factor": Value > factor);
 
-            get_sv!(output | outputs . "color": Color > out);
+            get_sv!(output | outputs . "color": IColor > out);
 
             handle_missing_socket_values![width, height, left, right];
             let factor = factor.unwrap_or(DEFAULT_FACTOR);

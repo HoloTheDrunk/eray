@@ -69,5 +69,8 @@ number = @{ (ASCII_DIGIT | "_")+ ~ ("." ~ (ASCII_DIGIT | "_")*)? }
 
 /// Any whitespace, significant in parsing.
 WHITESPACE = _{ " " | "\t" | NEWLINE }
-/// Full line comments.
-COMMENT = _{ "#" ~ (!"#" ~ ANY)* ~ "#" }
+/// Comments.
+COMMENT = _{ 
+  ("#" ~ (!"!" ~ (!"#" ~ ANY)*)? ~ "#")
+  | ("#!" ~ (!NEWLINE ~ ANY)* ~ NEWLINE)
+}
