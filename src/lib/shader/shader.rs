@@ -12,7 +12,7 @@ pub enum Error {
     /// Missing socket or value.
     Missing(Side, Name),
 
-    #[error("Missing {} on {0:?} side", .1.into_iter().map(|v| v.to_string()).collect::<Vec<String>>().join(", "))]
+    #[error("Missing {} on {0:?} side", .1.iter().map(|v| v.to_string()).collect::<Vec<String>>().join(", "))]
     /// Missing many sockets or values.
     MissingMany(Side, Vec<Name>),
 
@@ -192,11 +192,11 @@ mod test {
             get_sv!( input | inputs  . "value" : Value > in_value);
             get_sv!(output | outputs . "value" : Value > out_value);
 
-            let initial = out_value.clone();
+            let initial = *out_value;
 
             *out_value.get_or_insert(0.) += in_value.unwrap_or(0.);
 
-            let modified = out_value.clone();
+            let modified = *out_value;
 
             assert_ne!(initial, modified);
 

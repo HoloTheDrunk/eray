@@ -252,7 +252,7 @@ fn get_loaded(
     };
 
     Ok(loaded
-        .get(&name)
+        .get(name)
         .ok_or_else(|| err(UndefinedError::Undefined))?
         .iter()
         .find(|&loaded| &loaded.signature() == signature)
@@ -269,9 +269,9 @@ fn parse_imports(
     imports: Pair<Rule>,
     loaded: &mut HashMap<Name, Vec<ImportedNode<Unvalidated>>>,
 ) -> PResult<Vec<Import>> {
-    Ok(imports
+    imports
         .into_inner()
-        .map(|import| {
+        .flat_map(|import| {
             parse_import(import.clone()).map(|parsed| {
                 // Among the loaded nodes with the same name, is there one with the correct signature?
                 get_loaded(
@@ -282,11 +282,10 @@ fn parse_imports(
                     &Section::Imports,
                 )?;
 
-                Ok(parsed.clone())
+                Ok(parsed)
             })
         })
-        .flatten()
-        .collect::<PResult<_>>()?)
+        .collect::<PResult<_>>()
 }
 
 fn parse_import(import: Pair<Rule>) -> PResult<Import> {
@@ -596,18 +595,16 @@ fn parse_field(
         Some(node_id) => {
             let r#type = nodes
                 .get(&node_id)
-                .map(|node| match side {
+                .and_then(|node| match side {
                     Side::Input => node.signature().output.get(&socket).cloned(),
                     Side::Output => node.signature().input.get(&socket).cloned(),
                 })
-                .flatten()
-                .ok_or_else(|| error(String::from(&node_id)))?
-                .clone();
+                .ok_or_else(|| error(String::from(&node_id)))?;
 
             (LinkSide::NodeSocket(node_id, socket), r#type)
         }
         None => {
-            let r#type = match side {
+            let r#type = *match side {
                 Side::Input => graph_signature
                     .input
                     .get(&socket)
@@ -616,8 +613,7 @@ fn parse_field(
                     .output
                     .get(&socket)
                     .ok_or_else(|| error(format!("@OUT.{}", String::from(&socket))))?,
-            }
-            .clone();
+            };
 
             (LinkSide::GraphSocket(socket), r#type)
         }
@@ -640,7 +636,7 @@ fn parse_input(input: Pair<Rule>) -> PResult<HashMap<Name, SocketType>> {
         let span = var.as_span();
         let (id, ty) = parse_var(var);
 
-        if let Some(_) = res.insert(id.as_str().into(), ty) {
+        if res.insert(id.as_str().into(), ty).is_some() {
             return Err(Error::new(
                 ErrorKind::Code {
                     r#type: CodeError::Redefinition(id),
@@ -661,7 +657,7 @@ fn parse_output(output: Pair<Rule>) -> PResult<HashMap<Name, SocketType>> {
         let span = var.as_span();
         let (id, ty) = parse_var(var);
 
-        if let Some(_) = res.insert(id.as_str().into(), ty) {
+        if res.insert(id.as_str().into(), ty).is_some() {
             return Err(Error::new(
                 ErrorKind::Code {
                     r#type: CodeError::Redefinition(id),
@@ -739,8 +735,8 @@ mod test {
                         nodes:
                             "inner": node! {
                                 inputs:
-                                    "lhs": (ssref!(graph "lhs"), SocketType::Vec3.into()),
-                                    "rhs": (ssref!(graph "rhs"), SocketType::Color.into()),
+                                    "lhs": (ssref!(graph "lhs"), SocketType::Vec3),
+                                    "rhs": (ssref!(graph "rhs"), SocketType::Color),
                                 outputs:
                                     "value": SocketType::Value.into(),
                             },
@@ -758,8 +754,8 @@ mod test {
                         nodes:
                             "inner": node! {
                                 inputs:
-                                    "lhs": (ssref!(graph "lhs"), SocketType::Vec3.into()),
-                                    "rhs": (ssref!(graph "rhs"), SocketType::Color.into()),
+                                    "lhs": (ssref!(graph "lhs"), SocketType::Vec3),
+                                    "rhs": (ssref!(graph "rhs"), SocketType::Color),
                                 outputs:
                                     "value": SocketType::Value.into(),
                             },
@@ -777,8 +773,8 @@ mod test {
                     nodes:
                         "inner": node! {
                             inputs:
-                                "x": (ssref!(graph "x"), SocketType::Value.into()),
-                                "y": (ssref!(graph "y"), SocketType::Value.into()),
+                                "x": (ssref!(graph "x"), SocketType::Value),
+                                "y": (ssref!(graph "y"), SocketType::Value),
                             outputs:
                                 "value": SocketType::Value.into(),
                         },

@@ -15,14 +15,14 @@ macro_rules! missing_socket_error_vec {
 #[macro_export]
 macro_rules! handle_missing_socket_values {
     ($($name:ident),+ $(,)?) => {
-        let missing: Vec<crate::shader::graph::Name> = crate::shaderlib::utils::missing_socket_error_vec![$($name),+]
+        let missing: Vec<$crate::shader::graph::Name> = $crate::shaderlib::utils::missing_socket_error_vec![$($name),+]
             .into_iter()
             .filter_map(|(is_none, name)| is_none.then(|| name.into()))
             .collect();
 
         if missing.len() != 0 {
-            return Err(crate::shader::shader::Error::MissingMany(
-                crate::shader::shader::Side::Input,
+            return Err($crate::shader::shader::Error::MissingMany(
+                $crate::shader::shader::Side::Input,
                 missing
             ));
         }

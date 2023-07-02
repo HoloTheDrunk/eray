@@ -41,8 +41,7 @@ impl Material {
         #[cfg(debug_assertions)]
         self.selected_outputs
             .get(&StandardMaterialOutput::Color)
-            .map(|name| self.graph.outputs.get(name))
-            .flatten()
+            .and_then(|name| self.graph.outputs.get(name))
             .map(|(_ref, value)| match value {
                 SocketValue::IColor(image) => image
                     .as_ref()
@@ -58,9 +57,8 @@ impl Material {
         let get_value = |output: StandardMaterialOutput| {
             self.selected_outputs
                 .get(&output)
-                .map(|name| self.graph.outputs.get(name))
-                .flatten()
-                .map(|(_ref, value)| match value {
+                .and_then(|name| self.graph.outputs.get(name))
+                .and_then(|(_ref, value)| match value {
                     SocketValue::IValue(image) => image.as_ref().map(|image| {
                         image.mod_get(
                             (x * image.width as f32) as u32,
@@ -69,19 +67,17 @@ impl Material {
                     }),
                     _ => None,
                 })
-                .flatten()
         };
 
         MaterialOutputBundle {
             color: self
                 .selected_outputs
                 .get(&StandardMaterialOutput::Color)
-                .map(|name| {
+                .and_then(|name| {
                     let res = self.graph.outputs.get(name);
                     res
                 })
-                .flatten()
-                .map(|(_ref, value)| match value {
+                .and_then(|(_ref, value)| match value {
                     SocketValue::IColor(image) => image.as_ref().map(|image| {
                         image.mod_get(
                             (x * image.width as f32) as u32,
@@ -89,8 +85,7 @@ impl Material {
                         )
                     }),
                     _ => None,
-                })
-                .flatten(),
+                }),
             diffuse: get_value(StandardMaterialOutput::Diffuse),
             specular: get_value(StandardMaterialOutput::Specular),
             specular_power: get_value(StandardMaterialOutput::SpecularPower),

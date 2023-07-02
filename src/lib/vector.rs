@@ -220,10 +220,10 @@ impl<const DIM: usize, TYPE: Copy + Into<f32>> From<TYPE> for Vector<DIM, TYPE> 
     }
 }
 
-impl<const DIM: usize, TYPE: Into<f32>> Into<f32> for Vector<DIM, TYPE> {
-    fn into(self) -> f32 {
-        let len = self.inner.len();
-        self.inner.into_iter().map(Into::into).sum::<f32>() / len as f32
+impl<const DIM: usize, TYPE: Into<f32>> From<Vector<DIM, TYPE>> for f32 {
+    fn from(val: Vector<DIM, TYPE>) -> Self {
+        let len = val.inner.len();
+        val.inner.into_iter().map(Into::into).sum::<f32>() / len as f32
     }
 }
 

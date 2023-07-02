@@ -75,9 +75,9 @@ impl Triangle {
     pub fn project(&self, point: Vector) -> Vector {
         let v = point - self.a.position;
         let dist = v.dot_product(&self.normal);
-        let res = point - self.normal * dist;
+        
 
-        res
+        point - self.normal * dist
     }
 }
 

@@ -450,7 +450,7 @@ impl Graph<Unvalidated> {
                     let SocketRef::Node(node_id, socket) = socket_ref else {continue};
 
                     // Check for cycles, i.e. if the node was already encountered in the path.
-                    if path.contains(&node_id) {
+                    if path.contains(node_id) {
                         return Err(Error::Cycle {
                             detected: node_id.clone(),
                             target_socket: socket.clone(),
@@ -460,7 +460,7 @@ impl Graph<Unvalidated> {
                     }
 
                     // Ignore nodes visited from DFS starting from other graph outputs.
-                    if visited.contains(&node_id) {
+                    if visited.contains(node_id) {
                         continue;
                     }
 
@@ -525,13 +525,10 @@ impl Graph<Validated> {
                             .unwrap()
                             .outputs()
                             .get(&name)
-                            .expect(
-                                format!("Output `{}` not found for node `{}`.", name.0, node_id.0)
-                                    .as_ref(),
-                            ))
+                            .unwrap_or_else(|| panic!("Output `{}` not found for node `{}`.", name.0, node_id.0)))
                         .clone();
                     }
-                    SocketRef::Graph(name) => value = self.inputs.get(&name).unwrap().clone(),
+                    SocketRef::Graph(name) => value = self.inputs.get(name).unwrap().clone(),
                 };
 
                 Ok((name, (Some(socket_ref), value)))
@@ -660,7 +657,7 @@ impl<State> ImportedNode<State> {
             input: self
                 .inputs
                 .iter()
-                .map(|(name, (_socket_ref, socket_type))| (name.clone(), socket_type.clone()))
+                .map(|(name, (_socket_ref, socket_type))| (name.clone(), *socket_type))
                 .collect(),
 
             output: self
@@ -773,7 +770,7 @@ impl<State> Node<State> {
         let input = self
             .inputs()
             .iter()
-            .map(|(name, (_socket_ref, socket_type))| (name.clone(), socket_type.clone()))
+            .map(|(name, (_socket_ref, socket_type))| (name.clone(), *socket_type))
             .collect();
 
         let output = self

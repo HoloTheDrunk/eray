@@ -255,7 +255,7 @@ impl Object<Built> {
                         // Stride (could also be 0 here)
                         size_of::<Vector<3, f32>>().try_into().unwrap(),
                         // Pointer in VBO
-                        0 as *const _,
+                        std::ptr::null(),
                     );
 
                     gl::EnableVertexAttribArray(index);
@@ -375,7 +375,7 @@ impl BoundingBox {
             }
         }
 
-        return true;
+        true
     }
 
     fn stretch_to(&mut self, pos: &Vector<3, f32>) {
@@ -398,7 +398,7 @@ fn parse_coords(tokens: SplitWhitespace, line: Option<usize>) -> Vec<f32> {
         .map(|token| {
             token
                 .parse::<f32>()
-                .expect(format!("Failed to parse coords, should be an f32: {token}").as_str())
+                .unwrap_or_else(|_| panic!("Failed to parse coords, should be an f32: {token}"))
         })
         .collect::<Vec<_>>();
 

@@ -109,8 +109,8 @@ impl From<f32> for Color {
     }
 }
 
-impl Into<f32> for Color {
-    fn into(self) -> f32 {
-        (self.r + self.g + self.b) / 3.
+impl From<Color> for f32 {
+    fn from(val: Color) -> Self {
+        (val.r + val.g + val.b) / 3.
     }
 }

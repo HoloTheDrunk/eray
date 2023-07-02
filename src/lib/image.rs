@@ -125,7 +125,7 @@ impl<IC: Copy + Into<f32>> From<Image<Vector<3, IC>>> for Image<Color> {
         Self {
             width,
             height,
-            pixels: pixels.into_iter().map(|v| Color::from(v)).collect(),
+            pixels: pixels.into_iter().map(Color::from).collect(),
         }
     }
 }
@@ -135,7 +135,7 @@ impl From<Image<f32>> for Image<Color> {
         Self {
             width: value.width,
             height: value.height,
-            pixels: value.pixels.into_iter().map(|v| Color::from(v)).collect(),
+            pixels: value.pixels.into_iter().map(Color::from).collect(),
         }
     }
 }
