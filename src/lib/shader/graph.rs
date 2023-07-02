@@ -316,11 +316,15 @@ states! {
     Validated,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 /// [Graph] error
 pub enum Error {
+    #[error("Graph output `{}` left unlinked", .0.to_string())]
     /// An unlinked and unset graph output is likely unintended.
     UnlinkeUnsetdGraphOutput(Name),
+
+    #[error("Detected a cycle while validating the path {during:?}; cycle is from a `{}` socket to a `{}` socket, reaching node `{}`",
+        source_socket.to_string(), target_socket.to_string(), detected.to_string())]
     /// Detected a cycle on the node with the given [NodeId].
     Cycle {
         /// Current path.
@@ -332,8 +336,12 @@ pub enum Error {
         /// Node detected as already visited in the current path.
         detected: NodeId,
     },
+
+    #[error("A shader function returned an error: {0}")]
     /// [Shader] returned with an error.
     Shader(super::shader::Error),
+
+    #[error("Referencing missing {0:?} socket {}", .1.to_string())]
     /// Trying to get/set a non-existent socket.
     Missing(Side, Name),
 }

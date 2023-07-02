@@ -1,19 +1,28 @@
 //! Shader implementation, a [Shader] being a wrapper containing functions of a specific type
 //! signature with convenience functions.
 
-use std::collections::HashMap;
-
 use super::graph::{Name, SocketType, SocketValue};
 
-#[derive(Debug, PartialEq)]
+use std::collections::HashMap;
+
+#[derive(Debug, PartialEq, thiserror::Error)]
 /// Possible errors returned during a [Shader]'s lifecycle.
 pub enum Error {
+    #[error("Missing {} on {0:?} side", .1.to_string())]
     /// Missing socket or value.
     Missing(Side, Name),
+
+    #[error("Missing {} on {0:?} side", .1.into_iter().map(|v| v.to_string()).collect::<Vec<String>>().join(", "))]
     /// Missing many sockets or values.
     MissingMany(Side, Vec<Name>),
+
+    #[error("Mismatched type between {} ({:?}) and {} ({:?})", 
+        {let (name, _) = .0; name.to_string()}, {let (_, ty) = .0; ty},
+        {let (name, _) = .1; name.to_string()}, {let (_, ty) = .1; ty})]
     /// Wrong type for socket.
     MismatchedTypes((Name, SocketType), (Name, SocketType)),
+
+    #[error("Invalid type {got:?} for {}, expected {expected:?}", .name.to_string())]
     /// Tried to unwrap a socket with the wrong expected [SocketType].
     InvalidType {
         /// [Name] of the socket.
@@ -23,6 +32,8 @@ pub enum Error {
         /// Actual [SocketType] of the socket.
         expected: SocketType,
     },
+
+    #[error("Unknown error{}", .0.as_ref().map_or("".to_string(), |v| format!(": {v}")))]
     /// Unknown or untyped error
     Unknown(Option<String>),
 }
@@ -90,7 +101,7 @@ impl Clone for Shader {
 
 /// Intermediary trait to allow boxing function inside a struct.
 pub trait CloneFn:
-    Fn(&HashMap<Name, SocketValue>, &mut HashMap<Name, SocketValue>) -> Result<(), Error>
+    Send + Sync + Fn(&HashMap<Name, SocketValue>, &mut HashMap<Name, SocketValue>) -> Result<(), Error>
 {
     /// Clone the boxed function.
     fn clone_box(&self) -> Box<dyn CloneFn>;
@@ -98,7 +109,9 @@ pub trait CloneFn:
 
 impl<F: Clone + 'static> CloneFn for F
 where
-    F: Fn(&HashMap<Name, SocketValue>, &mut HashMap<Name, SocketValue>) -> Result<(), Error>,
+    F: Send
+        + Sync
+        + Fn(&HashMap<Name, SocketValue>, &mut HashMap<Name, SocketValue>) -> Result<(), Error>,
 {
     fn clone_box(&self) -> Box<dyn CloneFn> {
         Box::new(self.clone())

@@ -52,7 +52,8 @@ macro_rules! match_rule {
 /// Parsing result.
 pub type PResult<T> = Result<T, self::Error>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("Encountered an error while parsing at {line:?}: {kind}")]
 /// Parsing error.
 pub struct Error {
     kind: ErrorKind,
@@ -65,11 +66,14 @@ impl Error {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 /// Type of parsing [Error]
 pub enum ErrorKind {
+    #[error("Pest parsing error: {0}")]
     /// Error during Pest parsing, input is grammatically wrong.
     Parsing(pest::error::Error<Rule>),
+
+    #[error("Code error in {section:?} section: {r#type}")]
     /// Logic error with the input's code.
     Code {
         /// Type of error.
@@ -79,11 +83,21 @@ pub enum ErrorKind {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 /// Logic error within the input graph code.
 pub enum CodeError {
+    #[error("Redefinition of {0}")]
     /// Redefined item (import / node).
     Redefinition(String),
+
+    #[error("Undefined identifier {got}{}{}",
+        guess.as_ref().map_or(".".to_string(), |v| format!(", did you mean {v}?")),
+        if let UndefinedError::Undefined = variant {
+            "".to_string()
+        } else {
+            format!(" Details: {variant}")
+        }
+    )]
     /// Use of an undeclared identifier.
     Undefined {
         /// Parsed name.
@@ -93,25 +107,36 @@ pub enum CodeError {
         /// Subtype providing additional precisions on the error.
         variant: UndefinedError,
     },
+
+    #[error("Import signature mismatch on {}: {1:?} vs {2:?}", .0.to_string())]
     /// Mismatch between two [Signatures](Signature) when importing a [Node].
     SignatureMismatch(Name, Signature, Signature),
+
+    #[error("Socket type mismatc: {0:?} vs {1:?}")]
     /// Mismatch between two sockets' types.
     SocketType(SocketType, SocketType),
+
+    #[error("Trying to link two inputs or outputs together")]
     /// Trying to link two inputs or two outputs.
     SideMismatch,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 /// Detail regarding an undefined identifier.
 pub enum UndefinedError {
+    #[error("Undefined identifier")]
     /// Identifier is simply undefined.
     Undefined,
+
+    #[error("Unimported identifier {}", name.to_string())]
     /// Name is undefined but is available in the loaded nodes.
     NotImported {
         #[allow(missing_docs)]
         name: Name,
     },
+
     #[allow(missing_docs)]
+    #[error("No signature overload matching {signature:?} for {}", name.to_string())]
     NoSignatureOverload { name: Name, signature: Signature },
 }
 

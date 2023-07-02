@@ -71,7 +71,7 @@ pub fn node() -> NodeResult {
             "green": (None, SocketType::IValue),
             "blue": (None, SocketType::IValue),
         outputs:
-            "color": SocketType::Color.into();
+            "color": SocketType::IColor.into();
         |inputs, outputs| {
             get_sv!( input | inputs  . "width": Value > width);
             get_sv!( input | inputs  . "height": Value > height);

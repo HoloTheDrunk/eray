@@ -1,7 +1,6 @@
 mod shaderlib;
 
 use eray::{
-    engine::*,
     node,
     prelude::*,
     shader::{
@@ -12,7 +11,7 @@ use eray::{
 };
 use map_macro::hash_map;
 
-use std::{collections::HashMap, path::Path};
+use std::path::Path;
 
 fn main() -> std::io::Result<()> {
     let mut cube = Object::load_obj(Path::new("./objects/cube.obj")).unwrap();
@@ -67,6 +66,9 @@ fn main() -> std::io::Result<()> {
     // engine.render_to_path(Path::new("output.ppm")).unwrap();
 
     // shader::parsing::parse_shader("nodes/rgb_wave.eray", &mut HashMap::new()).unwrap();
+
+    let slib: &Vec<_> = shaderlib::SHADERLIB.as_ref();
+    dbg!(slib);
 
     Ok(())
 }
