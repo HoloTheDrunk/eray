@@ -45,14 +45,16 @@ impl Shader {
     /// Creates a [Shader] from a shader function.
     /// # Example
     /// ```
+    /// use eray::{get_sv, shader::{shader::Shader}};
+    ///
     /// Shader::new(|inputs, outputs| {
-    ///     get_sv!(input  | inputs  . "value" : Number > in_value);
-    ///     get_sv!(output | outputs . "value" : Number > out_value);
+    ///     get_sv!(input  | inputs  . "value" : Value > in_value);
+    ///     get_sv!(output | outputs . "value" : Value > out_value);
     ///
     ///     *out_value.get_or_insert(0.) = -in_value.unwrap_or(0.);
     ///
     ///     Ok(())
-    /// })
+    /// });
     /// ```
     pub fn new(
         func: fn(&HashMap<Name, SocketValue>, &mut HashMap<Name, SocketValue>) -> Result<(), Error>,
@@ -109,41 +111,54 @@ where
 /// # Example
 ///
 /// ```
-/// get_sv!( input | inputs  . "value" : Number > in_value);
-/// get_sv!(output | outputs . "value" : Number > out_value);
+/// use eray::{get_sv, shader::graph::{Name, SocketType, SocketValue}};
+/// use std::collections::HashMap;
+///
+/// let mut inputs = HashMap::<Name, SocketValue>::new();
+/// inputs.insert("value".into(), SocketType::Value.into());
+/// let mut outputs = inputs.clone();
+///
+/// (|| {
+///     get_sv!( input | inputs  . "value" : Value > in_value);
+///     get_sv!(output | outputs . "value" : Value > out_value);
+///     Ok(())
+/// })().unwrap();
 /// ```
 macro_rules! get_sv {
     (input | $hashmap:ident . $field:literal : $type:ident > $name:ident) => {
         let $name = $hashmap.get(&$field.into()).ok_or_else(|| {
-            crate::shader::shader::Error::Missing(crate::shader::shader::Side::Input, $field.into())
+            $crate::shader::shader::Error::Missing(
+                $crate::shader::shader::Side::Input,
+                $field.into(),
+            )
         })?;
 
         #[rustfmt::skip]
-        let crate::shader::graph::SocketValue::$type($name) = $name
+        let $crate::shader::graph::SocketValue::$type($name) = $name
             else {
-                return Err(crate::shader::shader::Error::InvalidType {
+                return Err($crate::shader::shader::Error::InvalidType {
                     name: $field.into(),
-                    got: crate::shader::graph::SocketType::from($name),
-                    expected: crate::shader::graph::SocketType::$type,
+                    got: $crate::shader::graph::SocketType::from($name),
+                    expected: $crate::shader::graph::SocketType::$type,
                 });
             };
     };
 
     (output | $hashmap:ident . $field:literal : $type:ident > $name:ident) => {
         let $name = $hashmap.get_mut(&$field.into()).ok_or_else(|| {
-            crate::shader::shader::Error::Missing(
-                crate::shader::shader::Side::Output,
+            $crate::shader::shader::Error::Missing(
+                $crate::shader::shader::Side::Output,
                 $field.into(),
             )
         })?;
 
         #[rustfmt::skip]
-        let crate::shader::graph::SocketValue::$type(ref mut $name) = $name
+        let $crate::shader::graph::SocketValue::$type(ref mut $name) = $name
             else {
-                return Err(crate::shader::shader::Error::InvalidType {
+                return Err($crate::shader::shader::Error::InvalidType {
                     name: $field.into(),
-                    got: crate::shader::graph::SocketType::from($name),
-                    expected: crate::shader::graph::SocketType::$type,
+                    got: $crate::shader::graph::SocketType::from($name),
+                    expected: $crate::shader::graph::SocketType::$type,
                 });
             };
     };

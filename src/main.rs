@@ -15,31 +15,31 @@ use map_macro::hash_map;
 use std::{collections::HashMap, path::Path};
 
 fn main() -> std::io::Result<()> {
-    // let mut cube = Object::load_obj(Path::new("./objects/cube.obj")).unwrap();
-    //
-    // // cube.material = shaderlib::wave::material().unwrap();
-    // cube.material = material().unwrap();
-    // cube.material
-    //     .set_input(&"width".into(), SocketValue::Number(Some(1024.)))
-    //     .unwrap()
-    //     .set_input(&"height".into(), SocketValue::Number(Some(1024.)))
-    //     .unwrap()
-    //     // Wave
-    //     .set_input(&"x_fac".into(), SocketValue::Number(Some(1.)))
-    //     .unwrap()
-    //     .set_input(&"y_fac".into(), SocketValue::Number(Some(1.)))
-    //     .unwrap()
-    //     // Color
-    //     .set_input(&"red".into(), SocketValue::Number(Some(1.)))
-    //     .unwrap()
-    //     .set_input(&"green".into(), SocketValue::Number(Some(0.)))
-    //     .unwrap()
-    //     .set_input(&"blue".into(), SocketValue::Number(Some(0.)))
-    //     .unwrap()
-    //     // Mixing
-    //     .set_input(&"factor".into(), SocketValue::Number(Some(0.5)))
-    //     .unwrap();
-    // cube.material.update().unwrap();
+    let mut cube = Object::load_obj(Path::new("./objects/cube.obj")).unwrap();
+
+    // cube.material = shaderlib::wave::material().unwrap();
+    cube.material = material().unwrap();
+    cube.material
+        .set_input(&"width".into(), SocketValue::Value(Some(1024.)))
+        .unwrap()
+        .set_input(&"height".into(), SocketValue::Value(Some(1024.)))
+        .unwrap()
+        // Wave
+        .set_input(&"x_fac".into(), SocketValue::Value(Some(1.)))
+        .unwrap()
+        .set_input(&"y_fac".into(), SocketValue::Value(Some(1.)))
+        .unwrap()
+        // Color
+        .set_input(&"red".into(), SocketValue::Value(Some(1.)))
+        .unwrap()
+        .set_input(&"green".into(), SocketValue::Value(Some(0.)))
+        .unwrap()
+        .set_input(&"blue".into(), SocketValue::Value(Some(0.)))
+        .unwrap()
+        // Mixing
+        .set_input(&"factor".into(), SocketValue::Value(Some(0.5)))
+        .unwrap();
+    cube.material.update().unwrap();
     //
     // let mut engine = Engine::new((1024, 1024), 0, 0);
     // engine

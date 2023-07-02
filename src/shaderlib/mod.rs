@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 mod utils;
 
 pub mod flat_color;

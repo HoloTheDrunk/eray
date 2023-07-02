@@ -5,7 +5,7 @@ use super::{
     Signature,
 };
 
-use crate::{color::Color, image::Image, vector::Vector};
+use crate::{color::Color, image::{Image, Convertible}, vector::Vector};
 
 use std::{
     collections::{HashMap, VecDeque},
@@ -13,6 +13,7 @@ use std::{
     fmt::Debug,
     marker::PhantomData,
     str::FromStr,
+    string::ToString,
 };
 
 use paste::paste;
@@ -123,6 +124,39 @@ macro_rules! socket_value {
     };
 }
 
+macro_rules! socket_conversions {
+    ($($src:ident => $($dst:ident by $method:path)|+),+ $(,)?) => {paste!{
+        impl SocketValue {
+            /// Attempt conversion between two socket values.
+            pub fn try_convert(self, target: SocketType) -> Result<Self, ()> {
+                let err = Err(());
+
+                Ok(match self {
+                    $(
+                        SocketValue::$src(opt) => match target {
+                            $(
+                                SocketType::$dst => SocketValue::$dst(opt.map($method)),
+                            )+
+                            #[allow(unreachable_patterns)]
+                            _ => err?,
+                        },
+
+                        SocketValue::[<I $src>](opt) => match target {
+                            $(
+                                SocketType::[<I $dst>] => SocketValue::[<I $dst>](opt.map(|img| Image::convert_image(img, $method))),
+                            )+
+                            #[allow(unreachable_patterns)]
+                            _ => err?,
+                        }
+                    )+
+                    #[allow(unreachable_patterns)]
+                    _ => err?,
+                })
+            }
+        }
+    }};
+}
+
 socket_value! {
     /// Single value
     Value: f32 = 0.,
@@ -133,6 +167,43 @@ socket_value! {
     /// 3-channel color
     Color: Color = Color::default(),
 }
+
+socket_conversions! {
+    Value => Vec2 by Into::into | Vec3 by Into::into | Color by Into::into,
+    Vec2 => Value by Into::into,
+    Vec3 => Value by Into::into | Color by Into::into,
+    Color => Value by Into::into | Vec3 by Into::into,
+}
+
+// impl SocketValue {
+//     /// Attempt conversion between two socket values.
+//     pub fn try_convert(self, target: SocketType) -> Result<Self, ()> {
+//         let err = Err(());
+//
+//         Ok(match self {
+//             SocketValue::Value(opt) => match target {
+//                 SocketType::Vec2 => SocketValue::Vec2(opt.map(From::from)),
+//                 SocketType::Vec3 => SocketValue::Vec3(opt.map(From::from)),
+//                 SocketType::Color => SocketValue::Color(opt.map(From::from)),
+//                 _ => err?,
+//             },
+//             SocketValue::IValue(opt) => match target {
+//                 SocketType::IVec2 => SocketValue::IVec2(opt.map(Image::convert_image)),
+//                 SocketType::IVec3 => SocketValue::IVec3(opt.map(Image::convert_image)),
+//                 SocketType::IColor => SocketValue::IColor(opt.map(Image::convert_image)),
+//                 _ => err?,
+//             },
+//
+//             SocketValue::Vec3(opt) => todo!(),
+//             SocketValue::IVec3(opt) => todo!(),
+//
+//             SocketValue::Color(opt) => todo!(),
+//             SocketValue::IColor(opt) => todo!(),
+//
+//             _ => err?,
+//         })
+//     }
+// }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 /// Wrapper around [String].
@@ -145,6 +216,11 @@ impl From<&str> for NodeId {
 impl From<&NodeId> for String {
     fn from(id: &NodeId) -> Self {
         id.0.clone()
+    }
+}
+impl ToString for NodeId {
+    fn to_string(&self) -> String {
+        self.0.clone()
     }
 }
 
@@ -161,6 +237,11 @@ impl From<&Name> for String {
         name.0.clone()
     }
 }
+impl ToString for Name {
+    fn to_string(&self) -> String {
+        self.0.clone()
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 /// Reference to a [Graph] or [Node] socket.
@@ -175,21 +256,31 @@ pub enum SocketRef {
 /// Shorthand to reference sockets from the [Graph](Graph) or other [Node](Node)s.
 /// # Example
 /// ```
+/// use eray::{sref, shader::graph::{SocketRef, Graph, Name, NodeId}};
+///
 /// let graph_socket = sref!(graph "socket_name");
 /// assert_eq!(graph_socket, SocketRef::Graph(Name::from("socket_name")));
 ///
 /// let node_socket = sref!(node "node_name" "socket_name");
-/// assert_eq!(node_socket, SocketRef::Node(Name::from("node_name"), Name::from("socket_name")));
+/// assert_eq!(node_socket, SocketRef::Node(NodeId::from("node_name"), Name::from("socket_name")));
 /// ```
 macro_rules! sref {
-    (graph $field:literal) => {
-        crate::shader::graph::SocketRef::Graph(crate::shader::graph::Name::from($field))
+    (graph $field:expr) => {
+        $crate::shader::graph::SocketRef::Graph($crate::shader::graph::Name::from($field))
     };
 
+    // TODO: Remove this version in favor of the expr one
     (node $node:literal $field:literal) => {
-        crate::shader::graph::SocketRef::Node(
-            crate::shader::graph::NodeId::from($node),
-            crate::shader::graph::Name::from($field),
+        $crate::shader::graph::SocketRef::Node(
+            $crate::shader::graph::NodeId::from($node),
+            $crate::shader::graph::Name::from($field),
+        )
+    };
+
+    (node $node:expr => $field:expr) => {
+        $crate::shader::graph::SocketRef::Node(
+            $crate::shader::graph::NodeId::from($node),
+            $crate::shader::graph::Name::from($field),
         )
     };
 }
@@ -199,11 +290,13 @@ macro_rules! sref {
 /// [Option::Some]. Calls [sref] internally so the syntax is the same.
 /// # Example
 /// ```
+/// use eray::{sref, ssref};
+///
 /// assert_eq!(ssref!(graph "value"), Some(sref!(graph "value")));
 /// ```
 macro_rules! ssref {
     ($($tree:tt)+) => {
-        Some(crate::shader::graph::sref!($($tree)+))
+        Some($crate::shader::graph::sref!($($tree)+))
     };
 }
 
@@ -271,33 +364,35 @@ pub struct Graph<State> {
 /// Instantiate a [Graph] concisely.
 /// # Example
 /// ```
+/// use eray::{graph, node, ssref, shader::graph::{SocketValue, SocketType}};
+///
 /// graph! {
 ///     inputs:
-///         "iFac": SocketValue::IValue(Some(2.)),
-///         "iName": SocketValue::String(None),
+///         "iFac": SocketValue::Value(Some(2.)),
+///         "iName": SocketValue::Value(None),
 ///     nodes:
 ///         "identity": node! {
 ///             inputs:
-///                 "value": (ssref!(graph "iFac"), SocketType::IValue),
+///                 "value": (ssref!(graph "iFac"), SocketType::Value),
 ///             outputs:
-///                 "value": SocketType::IValue.into();
+///                 "value": SocketType::Value.into();
 ///             |_inputs, _outputs| Ok(())
 ///         },
 ///         "invert": node! {
 ///             inputs:
-///                 "value": (ssref!(node "identity" "value"), SocketType::IValue),
+///                 "value": (ssref!(node "identity" "value"), SocketType::Value),
 ///             outputs:
-///                 "value": SocketType::IValue.into();
+///                 "value": SocketType::Value.into();
 ///         },
 ///     outputs:
-///         "oFac": (ssref!(node "invert" "value"), SocketValue::IValue(None)),
+///         "oFac": (ssref!(node "invert" "value"), SocketValue::Value(None)),
 /// };
 /// ```
 macro_rules! graph {
     { $($field:ident $(: $($name:literal : $value:expr),+)? $(,)?),+ } => {
-        crate::shader::graph::Graph {
+        $crate::shader::graph::Graph {
             $($field: [$($(($name.into(), $value)),+)?].into_iter().collect()),+,
-            state: ::std::marker::PhantomData::<crate::shader::graph::Unvalidated>,
+            state: ::std::marker::PhantomData::<$crate::shader::graph::Unvalidated>,
         }
     };
 }
@@ -689,7 +784,8 @@ impl<State> Node<State> {
 /// # Examples
 ///
 /// ```
-/// node! {
+/// use eray::{get_sv, ssref, node, shader::graph::{Node, Unvalidated, SocketValue, SocketType}};
+/// let node: Node<Unvalidated> = node! {
 ///     inputs:
 ///         "value": (ssref!(graph "iFac"), SocketType::IValue.into()),
 ///     outputs:
@@ -702,30 +798,52 @@ impl<State> Node<State> {
 ///
 ///         Ok(())
 ///     }
-/// }
+/// };
 /// ```
 /// The shader closure is optional and will be defaulted to a noop if empty.
 ///
 /// ```
 /// // With `imported` a HashMap<Name, ImportedNode<Unvalidated>>
+/// use eray::{graph, node, ssref, shader::graph::{Name, ImportedNode, Unvalidated, SocketType, Graph}};
+/// use std::collections::HashMap;
+///
+/// let mut imported = HashMap::<String, ImportedNode<Unvalidated>>::new();
+/// imported.insert("node".to_string(), ImportedNode::from((
+///     "node",
+///     graph!{
+///         inputs:
+///             "value": SocketType::Value.into(),
+///         nodes,
+///         outputs,
+///     }
+/// )));
+///
 /// node!{
 ///     import "node" from imported,
 ///     inputs:
-///         "value": ssref!(graph "value"),
-/// }
+///         "value": (None, SocketType::Value),
+/// };
 /// ```
 ///
 /// ```
-/// // With `sub_graph` an ImportedNode<Unvalidated>
-/// node!{
-///     import sub_graph,
+/// use eray::{graph, node, ssref, shader::graph::{Graph, Unvalidated, SocketType}};
+///
+/// let sub_graph = graph!{
 ///     inputs:
-///         "value": ssref!(graph "value"),
-/// }
+///         "value": SocketType::Value.into(),
+///     nodes,
+///     outputs,
+/// };
+///
+/// node!{
+///     import graph "name" sub_graph,
+///     inputs:
+///         "value": (ssref!(graph "value"), SocketType::Value),
+/// };
 /// ```
 macro_rules! node {
     ( import $name:literal from $imported:expr $(,)?) => {
-        crate::shader::graph::Node::Imported(
+        $crate::shader::graph::Node::Imported(
             $imported
                 .get($name)
                 .expect(format!("Could not find imported node `{}`. Imported nodes are: {}",
@@ -734,7 +852,7 @@ macro_rules! node {
     };
 
     ( import $name:literal from $imported:expr $(, inputs: $($input:literal : $socket_ref:expr)+)? $(,)?) => {
-        crate::shader::graph::Node::Imported({
+        $crate::shader::graph::Node::Imported({
             let mut res = $imported
                 .get($name)
                 .expect(format!("Could not find imported node `{}`. Imported nodes are: {}",
@@ -764,23 +882,45 @@ macro_rules! node {
         })
     };
 
-    ( import graph $name:literal $graph:expr $(,)? ) => {
-        crate::shader::graph::Node::Imported(
-            crate::shader::graph::ImportedNode::from(($name, $graph))
-        )
+    ( import graph $name:literal $graph:expr $(, inputs: $($input:literal : $socket_ref:expr)+)? $(,)? ) => {
+        $crate::shader::graph::Node::Imported({
+            let mut res = $crate::shader::graph::ImportedNode::from(($name.to_string(), $graph));
+
+            $(
+                $(
+                    let len = res.inputs.len();
+                    let inputs = res
+                        .inputs
+                        .keys()
+                        .map(String::from)
+                        .collect::<Vec<String>>()
+                        .join(", ");
+
+                    *res.inputs.get_mut(&$input.into()).expect(
+                        format!(
+                            "Could not find input `{}` for node `{}`. Node's inputs are: ({}) [{}]",
+                            $input, $name, len, inputs
+                        )
+                        .as_str(),
+                    ) = $socket_ref;
+                )+
+            )?
+
+            res
+        })
     };
 
     { $($field:ident $(: $($o_name:literal : $value:expr),+)?),+; $shader:expr $(,)? } => {
-        crate::shader::graph::Node::Graph(crate::shader::graph::GraphNode {
+        $crate::shader::graph::Node::Graph($crate::shader::graph::GraphNode {
             $($field: [$($(($o_name.into(), $value)),+)?].into_iter().collect()),+,
-            shader: crate::shader::shader::Shader::new($shader),
+            shader: $crate::shader::shader::Shader::new($shader),
         })
     };
 
     { $($field:ident $(: $($o_name:literal : $value:expr),+)?),+ $(,)? $(;)? } => {
-        crate::shader::graph::Node::Graph(crate::shader::graph::GraphNode {
+        $crate::shader::graph::Node::Graph($crate::shader::graph::GraphNode {
             $($field: [$($(($o_name.into(), $value)),+)?].into_iter().collect()),+,
-            shader: crate::shader::shader::Shader::default(),
+            shader: $crate::shader::shader::Shader::default(),
         })
     };
 }
@@ -791,7 +931,7 @@ pub use {graph, node, sref, ssref};
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::get_sv;
+    use crate::{graph, node, ssref, get_sv};
 
     fn setup_imports() -> HashMap<String, ImportedNode<Unvalidated>> {
         std::iter::once((
@@ -824,6 +964,7 @@ mod test {
         .collect()
     }
 
+    #[cfg(test)]
     mod cycle_detection {
         use super::*;
 

@@ -1,24 +1,29 @@
-# Node's inputs and outputs #
-| x: Value, y: Value | -> ( value: Value );
+#! Node's inputs and outputs
+| x: Value, y: Value, color: Color | -> ( value: Value );
 
-# Define custom nodes expected to be loaded #
+#! Define custom nodes expected to be loaded
 noise = noise: |x: Value, y: Value| -> value: Value;
 add = add: |lhs: Value, rhs: Value| -> value: Value;
 add_vc = add: |lhs: Value, rhs: Color| -> value: Value;
+#! vtv3 = value_to_vec3: |value: Value| -> vector: Vec3;
 
-# Declare nodes, $ indicates custom nodes #
+#! Declare nodes
 Noise = noise;
 B = add;
 C = add_vc;
 
-# Link node sockets #
+#! Link node sockets
 @IN.x -> Noise.x;
 @IN.y -> Noise.y;
 
 Noise.value -> B.lhs;
-Vec3(@IN.x).y -> B.rhs;
+#! Vec3(@IN.x).y -> B.rhs;
+@IN.x -> B.rhs;
+
 
 B.value -> C.lhs;
-Color(1, 1, 1) -> C.rhs;
+#! Color(1, 1, 1) -> C.rhs;
+@IN.color -> C.rhs;
+
 
 C.value -> @OUT.value;

@@ -1,6 +1,6 @@
 //! 3D vector definition
 
-use super::{DefaultType, DEFAULT_DIM};
+use super::{color::Color, DefaultType, DEFAULT_DIM};
 
 use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
 
@@ -9,7 +9,8 @@ use paste::paste;
 #[derive(PartialEq, Clone, Copy, Debug)]
 /// DIM-dimensional vector of TYPE values.
 pub struct Vector<const DIM: usize = DEFAULT_DIM, TYPE = DefaultType> {
-    inner: [TYPE; DIM],
+    /// Coordinate vector.
+    pub inner: [TYPE; DIM],
 }
 
 impl<const DIM: usize, TYPE: Default + Copy> Default for Vector<DIM, TYPE> {
@@ -205,7 +206,39 @@ impl<TYPE: Copy + Mul<Output = TYPE> + Sub<TYPE, Output = TYPE>> Vector<3, TYPE>
     }
 }
 
-impl<const DIM: usize, TYPE: Default> Vector<DIM, TYPE> {}
+impl From<Color> for Vector<3, f32> {
+    fn from(Color { r, g, b }: Color) -> Self {
+        Self { inner: [r, g, b] }
+    }
+}
+
+impl<const DIM: usize, TYPE: Copy + Into<f32>> From<TYPE> for Vector<DIM, TYPE> {
+    fn from(value: TYPE) -> Self {
+        Self {
+            inner: [value; DIM],
+        }
+    }
+}
+
+impl<const DIM: usize, TYPE: Into<f32>> Into<f32> for Vector<DIM, TYPE> {
+    fn into(self) -> f32 {
+        let len = self.inner.len();
+        self.inner.into_iter().map(Into::into).sum::<f32>() / len as f32
+    }
+}
+
+impl<const DIM: usize, TYPE: Default + Copy> Vector<DIM, TYPE> {
+    /// Change a vector's dimensionality, filling the missing values with the default one if needed.
+    pub fn resize<const NEW_DIM: usize>(value: Vector<DIM, TYPE>) -> Vector<NEW_DIM, TYPE> {
+        let mut v = Vector::<NEW_DIM, TYPE>::default();
+
+        for i in 0..DIM.min(NEW_DIM) {
+            v[i] = value[i];
+        }
+
+        v
+    }
+}
 
 #[cfg(test)]
 mod test {
