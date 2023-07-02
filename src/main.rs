@@ -1,6 +1,7 @@
 mod shaderlib;
 
 use eray::{
+    engine::Engine,
     node,
     prelude::*,
     shader::{
@@ -39,36 +40,39 @@ fn main() -> std::io::Result<()> {
         .set_input(&"factor".into(), SocketValue::Value(Some(0.5)))
         .unwrap();
     cube.material.update().unwrap();
-    //
-    // let mut engine = Engine::new((1024, 1024), 0, 0);
-    // engine
-    //     .scene()
-    //     .set_camera(Camera {
-    //         center: Vector::new(0., 0., 5.),
-    //         fov: Fov(60., 60.),
-    //         width: 1024,
-    //         ..Default::default()
-    //     })
-    //     .add_light(Light {
-    //         transform: Transform::default().apply_translation(Vector::new(0., 2., 0.)),
-    //         variant: LightVariant::Ambient,
-    //         color: Color::new(1., 1., 1.),
-    //         brightness: 0.2,
-    //     })
-    //     .add_light(Light {
-    //         transform: Transform::default().apply_translation(Vector::new(1., 1., 2.)),
-    //         variant: LightVariant::Point,
-    //         color: Color::new(1., 1., 1.),
-    //         brightness: 1.,
-    //     })
-    //     .add_object(cube.build().unwrap());
-    //
-    // engine.render_to_path(Path::new("output.ppm")).unwrap();
+
+    let mut engine = Engine::new((1024, 1024), 0, 0);
+    engine
+        .scene()
+        .set_camera(Camera {
+            center: Vector::new(0., 0., 5.),
+            fov: Fov(60., 60.),
+            width: 1024,
+            ..Default::default()
+        })
+        .add_light(Light {
+            transform: Transform::default().apply_translation(Vector::new(0., 2., 0.)),
+            variant: LightVariant::Ambient,
+            color: Color::new(1., 1., 1.),
+            brightness: 0.2,
+        })
+        .add_light(Light {
+            transform: Transform::default().apply_translation(Vector::new(1., 1., 2.)),
+            variant: LightVariant::Point,
+            color: Color::new(1., 1., 1.),
+            brightness: 1.,
+        })
+        .add_object(cube.build().unwrap());
+
+    #[cfg(not(debug_assertions))]
+    {
+        engine.render_to_path(Path::new("output.ppm")).unwrap();
+    }
 
     // shader::parsing::parse_shader("nodes/rgb_wave.eray", &mut HashMap::new()).unwrap();
 
     let slib: &Vec<_> = shaderlib::SHADERLIB.as_ref();
-    dbg!(slib);
+    dbg!(slib.len());
 
     Ok(())
 }

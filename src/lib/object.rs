@@ -351,7 +351,7 @@ impl BoundingBox {
             txmin = tymin;
         }
 
-        if tymax < tymax {
+        if tymax < txmax {
             txmax = tymax;
         }
 
