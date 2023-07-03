@@ -8,7 +8,7 @@ capabilities.
 ISIM:
 - [x] Object loading
 - [x] Generic graph-based computation pipeline
-- [ ] Raytracer using the shader graph {texture mapping bugged}
+- [x] Raytracer using the shader graph
 
 POGL:
 - [ ] Scene conversion for OpenGL {should already work}
@@ -20,7 +20,7 @@ TIFO:
 - [ ] Library of post-processing effects
 
 Bonus:
-- [ ] .eray parsing and dumping {link parsing bugged}
+- [ ] .eray parsing and dumping {dumping missing}
 - [ ] TUI editor
 
 ## Running
