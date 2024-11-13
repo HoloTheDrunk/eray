@@ -1,3 +1,6 @@
+> [!IMPORTANT]  
+> This is never getting finished, the whole structure is busted. I will however make something similar in the (hopefully near) future.
+
 # eray
 
 Simple TUI shader graph editor and OpenGL viewer with raytraced screenshot
